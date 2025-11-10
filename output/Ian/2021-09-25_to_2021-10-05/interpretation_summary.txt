@@ -1,0 +1,9 @@
+Event: Ian 2021-09-25 to 2021-10-05
+Stations considered: 1496
+
+Pearson correlation: LAT vs Missing% = 0.020; LON vs Missing% = 0.006
+
+Regional missing percent summary (mean, std, count):
+ - Coastal: mean=31.80 std=43.74 n=207
+ - Inland: mean=50.00 std=70.71 n=2
+ - Rural: mean=32.07 std=42.12 n=1287

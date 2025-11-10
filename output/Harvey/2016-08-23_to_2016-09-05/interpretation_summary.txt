@@ -1,0 +1,8 @@
+Event: Harvey 2016-08-23 to 2016-09-05
+Stations considered: 401
+
+Pearson correlation: LAT vs Missing% = 0.014; LON vs Missing% = -0.065
+
+Regional missing percent summary (mean, std, count):
+ - Coastal: mean=35.07 std=40.10 n=99
+ - Rural: mean=26.56 std=37.15 n=302

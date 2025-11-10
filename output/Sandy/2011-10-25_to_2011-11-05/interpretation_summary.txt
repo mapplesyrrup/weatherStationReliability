@@ -1,0 +1,9 @@
+Event: Sandy 2011-10-25 to 2011-11-05
+Stations considered: 600
+
+Pearson correlation: LAT vs Missing% = -0.099; LON vs Missing% = -0.048
+
+Regional missing percent summary (mean, std, count):
+ - Coastal: mean=40.17 std=43.06 n=106
+ - Inland: mean=39.42 std=46.15 n=52
+ - Rural: mean=32.39 std=40.85 n=442

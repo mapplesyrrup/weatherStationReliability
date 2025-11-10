@@ -1,0 +1,8 @@
+Event: Michael 2017-10-07 to 2017-10-12
+Stations considered: 283
+
+Pearson correlation: LAT vs Missing% = -0.016; LON vs Missing% = -0.015
+
+Regional missing percent summary (mean, std, count):
+ - Inland: mean=32.86 std=41.32 n=35
+ - Rural: mean=32.86 std=41.41 n=248

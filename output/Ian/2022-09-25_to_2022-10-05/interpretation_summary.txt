@@ -1,0 +1,9 @@
+Event: Ian 2022-09-25 to 2022-10-05
+Stations considered: 1469
+
+Pearson correlation: LAT vs Missing% = -0.009; LON vs Missing% = -0.012
+
+Regional missing percent summary (mean, std, count):
+ - Coastal: mean=28.21 std=38.18 n=203
+ - Inland: mean=27.27 std=38.57 n=2
+ - Rural: mean=30.03 std=38.98 n=1264

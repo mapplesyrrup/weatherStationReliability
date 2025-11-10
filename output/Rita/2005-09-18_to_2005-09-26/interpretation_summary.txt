@@ -1,0 +1,9 @@
+Event: Rita 2005-09-18 to 2005-09-26
+Stations considered: 803
+
+Pearson correlation: LAT vs Missing% = -0.065; LON vs Missing% = -0.044
+
+Regional missing percent summary (mean, std, count):
+ - Coastal: mean=18.06 std=36.44 n=32
+ - Inland: mean=66.67 std=49.24 n=12
+ - Rural: mean=18.62 std=36.82 n=759
