@@ -1,0 +1,2 @@
+coverage_before,coverage_after,redundancy_before,redundancy_after,mean_nearest_distance_before_km,mean_nearest_distance_after_km,coverage_delta,redundancy_delta,mean_nearest_distance_delta_km
+0.33568904593639576,0.39636363636363636,2.978947368389695,2.5229357797933676,10.127457802822262,11.161708608232134,0.060674590427240604,-0.4560115885963274,1.0342508054098722

@@ -1,1 +1,603 @@
-# Full batch-run script — Coastal / Inland / Rural (Option B)# - Uses Natural Earth coastline + urban areas if geopandas available# - Falls back to Haversine + city centroids if not# - Produces per-event folders with before/after CSVs, plots, merged comparisons, and text summaryimport osimport ioimport zipfileimport requestsimport pandas as pdimport numpy as npimport matplotlib.pyplot as pltfrom datetime import datetime, timedelta, datefrom math import radians, sin, cos, sqrt, atan2# -------------------------# CASE STUDIES# -------------------------case_studies = [    {"name":"Sandy","lat_min":39.5,"lat_max":42.5,"lon_min":-75.5,"lon_max":-72.0,     "start":"2012-10-25","end":"2012-11-05","prev_start":"2011-10-25","prev_end":"2011-11-05"},    {"name":"Ian","lat_min":26.0,"lat_max":34.0,"lon_min":-84.0,"lon_max":-78.5,     "start":"2022-09-25","end":"2022-10-05","prev_start":"2021-09-25","prev_end":"2021-10-05"},    {"name":"Harvey","lat_min":27.0,"lat_max":31.5,"lon_min":-96.5,"lon_max":-91.0,     "start":"2017-08-23","end":"2017-09-05","prev_start":"2016-08-23","prev_end":"2016-09-05"},    {"name":"Rita","lat_min":26.0,"lat_max":33.5,"lon_min":-98.5,"lon_max":-87.0,     "start":"2005-09-18","end":"2005-09-26","prev_start":"2004-09-18","prev_end":"2004-09-26"},    {"name":"Michael","lat_min":29.0,"lat_max":33.0,"lon_min":-86.5,"lon_max":-83.0,     "start":"2018-10-07","end":"2018-10-12","prev_start":"2017-10-07","prev_end":"2017-10-12"}]# -------------------------# USER VARIABLE# -------------------------variable = input("Enter variable (TMAX, TMIN, PRCP, TAVG): ").strip().upper()# -------------------------# FILES (must have these downloaded)# -------------------------station_file = 'ghcnd-stations.txt'inventory_file = 'ghcnd-inventory.txt'dly_folder = 'dly_files'os.makedirs(dly_folder, exist_ok=True)os.makedirs('output', exist_ok=True)# Check required GHCN filesfor req in [station_file, inventory_file]:    if not os.path.exists(req):        print(f"Missing required file: {req}\nDownload from https://www.ncei.noaa.gov/pub/data/ghcn/daily/")        raise SystemExit# -------------------------# Load inventory + stations# -------------------------inventory = pd.read_csv(inventory_file, sep=r'\s+', header=None,                        names=["ID","LAT","LON","ELEMENT","FIRSTYEAR","LASTYEAR"], engine='python')inventory['ID'] = inventory['ID'].astype(str).str.strip()station_data = []with open(station_file, 'r') as fh:    for line in fh:        sid = line[0:11].strip()        lat = float(line[12:20].strip())        lon = float(line[21:30].strip())        name = line[41:71].strip()        station_data.append((sid, lat, lon, name))station_df = pd.DataFrame(station_data, columns=['ID','LAT','LON','NAME'])station_df['ID'] = station_df['ID'].astype(str).str.strip()# -------------------------# Parse .dly function (existing)# -------------------------def parse_dly(filepath, variable, start_date, end_date):    days_dict = {}    try:        with open(filepath, 'r') as f:            for line in f:                if line[17:21] == variable:                    year = int(line[11:15])                    month = int(line[15:17])                    for i in range(31):                        try:                            val_str = line[21+i*8:26+i*8]                            val = int(val_str[:5])                            d = date(year, month, i+1)                            if start_date <= d <= end_date and val != -9999:                                days_dict[d] = 1                        except:                            continue    except Exception as e:        print("parse error:", e)    return days_dict# -------------------------# GIS utilities & fallback# -------------------------# Try geopandas + shapely approachUSE_GEOPANDAS = Truetry:    import geopandas as gpd    from shapely.geometry import Pointexcept Exception:    USE_GEOPANDAS = False    print("GeoPandas not available — script will use fallback (coast points + city centroids).")def haversine_km(lat1, lon1, lat2, lon2):    R = 6371.0    dlat = radians(lat2-lat1)    dlon = radians(lon2-lon1)    a = sin(dlat/2)**2 + cos(radians(lat1))*cos(radians(lat2))*sin(dlon/2)**2    c = 2 * atan2(sqrt(a), sqrt(1-a))    return R * c# fallback coast reference points (approximate)COAST_POINTS = [    (47.6, -122.3), (37.8, -122.4), (34.0, -118.2), (32.7, -117.1),    (29.76, -95.37), (30.3, -81.4), (25.8, -80.2), (27.8, -82.6),    (30.2, -89.2), (40.7, -74.0), (39.3, -76.6), (36.85, -75.98), (43.65, -70.25)]# fallback city centroids (urban proxy) — a short list of major coastal/inland citiesCITY_CENTROIDS = [    ("New York", 40.7128, -74.0060),    ("Philadelphia", 39.9526, -75.1652),    ("Baltimore", 39.2904, -76.6122),    ("Boston", 42.3601, -71.0589),    ("Miami", 25.7617, -80.1918),    ("Tampa", 27.9506, -82.4572),    ("Jacksonville", 30.3322, -81.6557),    ("Houston", 29.7604, -95.3698),    ("New Orleans",29.9511, -90.0715),    ("Tallahassee",30.4383, -84.2807),    ("Atlanta",33.7490, -84.3880)]# Download & load Natural Earth urban areas + coastline (if geopandas available)def download_and_load_naturalearth():    """    Returns (gdf_coastline, gdf_urban) or (None, None) on failure.    """    try:        # coastline        coast_url = "https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/10m/physical/ne_10m_coastline.zip"        urban_url = "https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/10m/cultural/ne_10m_urban_areas.zip"        tmpdir = "temp_naturalearth"        os.makedirs(tmpdir, exist_ok=True)        def download_and_extract(url):            r = requests.get(url, timeout=30)            r.raise_for_status()            z = zipfile.ZipFile(io.BytesIO(r.content))            z.extractall(tmpdir)            shp_files = [os.path.join(tmpdir,f) for f in os.listdir(tmpdir) if f.endswith('.shp')]            # return most recent shapefile if multiple (we'll let gpd.open pick)            return shp_files        # coastline        r = requests.get(coast_url, timeout=30)        r.raise_for_status()        z = zipfile.ZipFile(io.BytesIO(r.content))        z.extractall(tmpdir)        coast_shps = [os.path.join(tmpdir,f) for f in os.listdir(tmpdir) if f.endswith('.shp')]        gdf_coast = gpd.read_file(coast_shps[0])        # urban areas        r2 = requests.get(urban_url, timeout=30)        r2.raise_for_status()        z2 = zipfile.ZipFile(io.BytesIO(r2.content))        z2.extractall(tmpdir)        urban_shps = [os.path.join(tmpdir,f) for f in os.listdir(tmpdir) if f.endswith('.shp') and 'urban' in f.lower()]        if len(urban_shps) == 0:            urban_shps = [os.path.join(tmpdir,f) for f in os.listdir(tmpdir) if f.endswith('.shp')]        gdf_urban = gpd.read_file(urban_shps[0])        return gdf_coast, gdf_urban    except Exception as e:        print("Natural Earth download/load failed:", e)        return None, Nonedef compute_distances_and_regions(stations_df, output_folder, coastal_km_thresh=50):    """    stations_df: DataFrame with columns ID,LAT,LON,NAME    Returns stations_df copy with added Distance_to_Coast_km and Region ('Coastal'/'Inland'/'Rural')    """    st = stations_df.copy().reset_index(drop=True)    distances = None    region_col = None    if USE_GEOPANDAS:        try:            gdf_coast, gdf_urban = download_and_load_naturalearth()            if gdf_coast is not None:                # unified coastline                # project to metric (EPSG:3857) for distance calc                gdf_coast_proj = gdf_coast.to_crs(epsg=3857)                coast_union = gdf_coast_proj.unary_union                # build points and project                pts = gpd.GeoDataFrame(st, geometry=[Point(xy) for xy in zip(st['LON'], st['LAT'])], crs="EPSG:4326")                pts_proj = pts.to_crs(epsg=3857)                dists_m = pts_proj.geometry.apply(lambda p: p.distance(coast_union))                distances = dists_m.values / 1000.0  # km                # urban areas: mark stations inside urban polygons                if gdf_urban is not None:                    gdf_urban_proj = gdf_urban.to_crs(epsg=3857)                    # spatial join: pts_proj within any urban polygon                    pts_proj['in_urban'] = pts_proj.within(gdf_urban_proj.unary_union)                    in_urban = pts_proj['in_urban'].values                else:                    in_urban = np.array([False]*len(st))                # classify:                regions = []                for i, d in enumerate(distances):                    if d <= coastal_km_thresh:                        regions.append('Coastal')                    else:                        # if in urban polygon but not coastal -> Inland                        if in_urban[i]:                            regions.append('Inland')                        else:                            regions.append('Rural')                st['Distance_to_Coast_km'] = distances                st['Region'] = regions                return st        except Exception as e:            print("GeoPandas distance method failed, falling back:", e)    # fallback: haversine to coast points & city centroids to approximate urban areas    dist_to_coast = []    is_urban = []    for idx, row in st.iterrows():        lat, lon = row['LAT'], row['LON']        min_d = min(haversine_km(lat, lon, cp[0], cp[1]) for cp in COAST_POINTS)        dist_to_coast.append(min_d)        # urban proxy: station within X km of a city centroid -> urban        urb = any(haversine_km(lat, lon, c[1], c[2]) <= 30 for c in CITY_CENTROIDS)  # 30 km urban buffer        is_urban.append(urb)    st['Distance_to_Coast_km'] = np.array(dist_to_coast)    regions = []    for i, d in enumerate(dist_to_coast):        if d <= coastal_km_thresh:            regions.append('Coastal')        else:            if is_urban[i]:                regions.append('Inland')            else:                regions.append('Rural')    st['Region'] = regions    # Save fallback diagnostic    pd.DataFrame({'ID':st['ID'],'Distance_to_Coast_km':st['Distance_to_Coast_km'],'Region':st['Region']}) \      .to_csv(os.path.join(output_folder, 'region_assignment_fallback.csv'), index=False)    return st# -------------------------# run_event_period function# -------------------------def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, start_str, end_str):    print(f"\n--- {event_name} {start_str} → {end_str} ---")    output_folder = os.path.join('output', event_name, f"{start_str}_to_{end_str}")    os.makedirs(output_folder, exist_ok=True)    start_date = datetime.strptime(start_str, "%Y-%m-%d").date()    end_date = datetime.strptime(end_str, "%Y-%m-%d").date()    inv_filtered = inventory[(inventory['ELEMENT']==variable) &                             (inventory['FIRSTYEAR'] <= start_date.year) &                             (inventory['LASTYEAR'] >= end_date.year)]    stations = station_df[(station_df['LAT'] >= lat_min) & (station_df['LAT'] <= lat_max) &                          (station_df['LON'] >= lon_min) & (station_df['LON'] <= lon_max)]    stations = pd.merge(stations, inv_filtered[['ID']], on='ID', how='inner')    print(f"Stations filtered: {len(stations)}")    # download dly files if missing    base_url = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/all"    for sid in stations['ID'].unique():        dest = os.path.join(dly_folder, f"{sid}.dly")        if not os.path.exists(dest):            try:                r = requests.get(f"{base_url}/{sid}.dly", timeout=30)                if r.status_code == 200:                    with open(dest, 'wb') as fh:                        fh.write(r.content)            except Exception:                pass    date_list = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]    total = np.zeros(len(date_list))    valid = np.zeros(len(date_list))    missing_station_ids = [[] for _ in range(len(date_list))]    for sid in stations['ID'].unique():        path = os.path.join(dly_folder, f"{sid}.dly")        if os.path.exists(path):            vals = parse_dly(path, variable, start_date, end_date)            missing_days = sum(1 for d in date_list if d not in vals)            # include station even if 100% missing (we'll show it as 100% missing)            for i, d in enumerate(date_list):                total[i] += 1                if d in vals:                    valid[i] += 1                else:                    missing_station_ids[i].append(sid)    summary = pd.DataFrame({        'Date': [d.strftime("%Y-%m-%d") for d in date_list],        'Stations Reporting': valid.astype(int),        'Stations Missing': (total - valid).astype(int),        'Total Stations': total.astype(int),        '% Missing': np.round((1 - valid / total) * 100, 1),        'Missing Station IDs': [','.join(ids) if ids else '' for ids in missing_station_ids]    })    summary.to_csv(os.path.join(output_folder, 'missing_summary.csv'), index=False)    # station-by-station missing %    records = []    for sid in stations['ID'].unique():        path = os.path.join(dly_folder, f"{sid}.dly")        if os.path.exists(path):            vals = parse_dly(path, variable, start_date, end_date)            total_days = len(date_list)            missing_days = sum(1 for d in date_list if d not in vals)            info = stations[stations['ID'] == sid].iloc[0]            missing_pct = round((missing_days / total_days) * 100, 2)            records.append({'ID': sid, 'LAT': info['LAT'], 'LON': info['LON'], 'NAME': info['NAME'],                            'Total Days': total_days, 'Missing Days': missing_days, 'Missing %': missing_pct})    station_missing_df = pd.DataFrame(records)    station_missing_df.to_csv(os.path.join(output_folder, 'stations_with_missing_data.csv'), index=False)    # classify Coastal / Inland / Rural using urban polygons if possible, fallback otherwise    region_df = compute_distances_and_regions(stations[['ID','LAT','LON','NAME']], output_folder, coastal_km_thresh=50)    # merge region info into station_missing_df    station_missing_df = station_missing_df.merge(region_df[['ID','Distance_to_Coast_km','Region']], on='ID', how='left')    station_missing_df.to_csv(os.path.join(output_folder, 'stations_with_missing_data_region.csv'), index=False)    # Stats & plots    out_text_lines = []    out_text_lines.append(f"Event: {event_name} {start_str} to {end_str}")    out_text_lines.append(f"Stations considered: {len(station_missing_df)}")    out_text_lines.append("")    # Correlations    if len(station_missing_df) >= 3:        corr_lat = station_missing_df['LAT'].corr(station_missing_df['Missing %'])        corr_lon = station_missing_df['LON'].corr(station_missing_df['Missing %'])        out_text_lines.append(f"Pearson correlation: LAT vs Missing% = {corr_lat:.3f}; LON vs Missing% = {corr_lon:.3f}")    else:        corr_lat = corr_lon = np.nan        out_text_lines.append("Not enough stations to compute Pearson correlations.")    # Scatter LAT vs Missing    if len(station_missing_df) > 0:        plt.figure(figsize=(6,5))        plt.scatter(station_missing_df['LAT'], station_missing_df['Missing %'], alpha=0.7, s=20)        if not np.isnan(corr_lat):            plt.title(f"{event_name} LAT vs Missing% (r={corr_lat:.2f})")        else:            plt.title(f"{event_name} LAT vs Missing%")        plt.xlabel("Latitude"); plt.ylabel("Missing %"); plt.grid(True); plt.tight_layout()        plt.savefig(os.path.join(output_folder, 'LAT_vs_Missing.png')); plt.close()        plt.figure(figsize=(6,5))        plt.scatter(station_missing_df['LON'], station_missing_df['Missing %'], alpha=0.7, s=20)        if not np.isnan(corr_lon):            plt.title(f"{event_name} LON vs Missing% (r={corr_lon:.2f})")        else:            plt.title(f"{event_name} LON vs Missing%")        plt.xlabel("Longitude"); plt.ylabel("Missing %"); plt.grid(True); plt.tight_layout()        plt.savefig(os.path.join(output_folder, 'LON_vs_Missing.png')); plt.close()    # Region comparison: Coastal / Inland / Rural    region_stats = station_missing_df.groupby('Region')['Missing %'].agg(['mean','std','count']).reset_index()    region_stats.to_csv(os.path.join(output_folder, 'region_missing_stats.csv'), index=False)    out_text_lines.append("")    out_text_lines.append("Regional missing percent summary (mean, std, count):")    for _, r in region_stats.iterrows():        out_text_lines.append(f" - {r['Region']}: mean={r['mean']:.2f} std={r['std']:.2f} n={int(r['count'])}")    # Plot regional bar chart if more than one region present    if region_stats.shape[0] >= 2:        plt.figure(figsize=(6,5))        plt.bar(region_stats['Region'], region_stats['mean'], color=['#1f77b4','#ff7f0e','#2ca02c'][:len(region_stats)])        plt.ylabel('Mean % Missing')        plt.title(f"{event_name}: Coastal vs Inland vs Rural mean % missing")        plt.tight_layout()        plt.savefig(os.path.join(output_folder, 'Coastal_Inland_Rural_mean_missing.png')); plt.close()    # Save text summary    summary_txt = os.path.join(output_folder, 'interpretation_summary.txt')    with open(summary_txt, 'w') as fh:        fh.write("\n".join(out_text_lines))    print(f"Saved outputs to {output_folder}")    return station_missing_df, summary, region_stats# -------------------------# Batch runner: before/after + merge# -------------------------for case in case_studies:    name = case['name']    out_folder_event = os.path.join('output', name)    os.makedirs(out_folder_event, exist_ok=True)    before_df, before_summary, before_region = run_event_period(name, variable,                                                                case['lat_min'], case['lat_max'],                                                                case['lon_min'], case['lon_max'],                                                                case['prev_start'], case['prev_end'])    after_df, after_summary, after_region = run_event_period(name, variable,                                                             case['lat_min'], case['lat_max'],                                                             case['lon_min'], case['lon_max'],                                                             case['start'], case['end'])    # Merge before and after on station ID    merged = before_df.merge(after_df, on=['ID','LAT','LON','NAME'], how='outer', suffixes=('_Before','_After'))    merged.to_csv(os.path.join(out_folder_event, 'Before_vs_After_station_missing.csv'), index=False)    # Create a one-line summary CSV for easy viewing    compare_summary = pd.DataFrame([{        'Event': name,        'Before_mean_missing': before_df['Missing %'].mean() if not before_df.empty else np.nan,        'After_mean_missing': after_df['Missing %'].mean() if not after_df.empty else np.nan,        'Delta_mean_missing': (after_df['Missing %'].mean() - before_df['Missing %'].mean()) if (not after_df.empty and not before_df.empty) else np.nan    }])    compare_summary.to_csv(os.path.join(out_folder_event, 'before_after_summary.csv'), index=False)    print(f"Saved merged comparison for {name} to {out_folder_event}")print("\nBatch processing complete. Check the 'output' folder for results.")# -------------------------------------------------------------# NEW SECTION: Aggregate comparison across all case studies# -------------------------------------------------------------import globevent_summaries = []region_all = []for case in case_studies:    name = case["name"]    folder = os.path.join("output", name)    # Load before/after summary    summary_file = os.path.join(folder, "before_after_summary.csv")    if os.path.exists(summary_file):        df = pd.read_csv(summary_file)        event_summaries.append(df)    # Load region summaries for before and after    before_region_file = glob.glob(os.path.join(folder, f"{case['prev_start']}_to_{case['prev_end']}", "region_missing_stats.csv"))    after_region_file = glob.glob(os.path.join(folder, f"{case['start']}_to_{case['end']}", "region_missing_stats.csv"))    if before_region_file and after_region_file:        rb = pd.read_csv(before_region_file[0])        rb["Event"] = name        rb["Period"] = "Before"        ra = pd.read_csv(after_region_file[0])        ra["Event"] = name        ra["Period"] = "After"        region_all.append(rb)        region_all.append(ra)# Combine summariesevent_summaries = pd.concat(event_summaries, ignore_index=True)region_all = pd.concat(region_all, ignore_index=True)event_summaries.to_csv("output/CaseStudy_Before_After_Comparison_All.csv", index=False)region_all.to_csv("output/CaseStudy_Region_Comparison_All.csv", index=False)# -------------------------------------------------------------# PLOT #1: Before vs After (main statistical proof)# -------------------------------------------------------------plt.figure(figsize=(8,6))plt.bar(event_summaries["Event"], event_summaries["Before_mean_missing"], width=0.35, label="Before")plt.bar(event_summaries["Event"], event_summaries["After_mean_missing"], width=0.35, label="After", bottom=None)plt.ylabel("Mean % Missing Data")plt.title("Station Data Loss Before vs After Storm Events")plt.legend()plt.tight_layout()plt.savefig("output/Before_vs_After_Main_Comparison.png")plt.close()# -------------------------------------------------------------# PLOT #2: Coastal vs Rural Across Case Studies# -------------------------------------------------------------region_subset = region_all[region_all["Region"].isin(["Coastal","Rural"])]plt.figure(figsize=(8,6))for event in region_subset["Event"].unique():    sub = region_subset[(region_subset["Event"] == event) & (region_subset["Period"] == "After")]    plt.scatter(sub["Region"], sub["mean"], label=event, s=80)plt.ylabel("Mean % Missing Data (After Event)")plt.title("Coastal vs Rural Data Loss Across Case Studies (After Storms)")plt.legend()plt.tight_layout()plt.savefig("output/Coastal_vs_Rural_Across_Case_Studies.png")plt.close()
+# batch_run_with_dashboard.py
+# Full batch-run script with stats, network-resilience metrics, heatmaps and HTML dashboard.
+import os
+import io
+import zipfile
+import requests
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta, date
+from math import radians, sin, cos, sqrt, atan2
+import glob
+
+# Optional libs
+USE_GEOPANDAS = True
+try:
+    import geopandas as gpd
+    from shapely.geometry import Point
+except Exception:
+    USE_GEOPANDAS = False
+    print("GeoPandas not available — using fallback methods.")
+
+USE_SEABORN = True
+try:
+    import seaborn as sns
+except Exception:
+    USE_SEABORN = False
+    print("Seaborn not available — using matplotlib alone.")
+
+USE_SCIPY = True
+try:
+    from scipy.stats import f_oneway, kruskal, ttest_ind, mannwhitneyu, chi2_contingency, spearmanr, kendalltau, ttest_rel, levene
+    from scipy.interpolate import griddata
+except Exception:
+    USE_SCIPY = False
+    print("SciPy not available — some statistical/heatmap features will fallback or be limited.")
+
+# -------------------------
+# CASE STUDIES
+# -------------------------
+case_studies = [
+    {"name":"Sandy","lat_min":39.5,"lat_max":42.5,"lon_min":-75.5,"lon_max":-72.0,
+     "start":"2012-10-25","end":"2012-11-05","prev_start":"2011-10-25","prev_end":"2011-11-05"},
+    {"name":"Ian","lat_min":26.0,"lat_max":34.0,"lon_min":-84.0,"lon_max":-78.5,
+     "start":"2022-09-25","end":"2022-10-05","prev_start":"2021-09-25","prev_end":"2021-10-05"},
+    {"name":"Harvey","lat_min":27.0,"lat_max":31.5,"lon_min":-96.5,"lon_max":-91.0,
+     "start":"2017-08-23","end":"2017-09-05","prev_start":"2016-08-23","prev_end":"2016-09-05"},
+    {"name":"Rita","lat_min":26.0,"lat_max":33.5,"lon_min":-98.5,"lon_max":-87.0,
+     "start":"2005-09-18","end":"2005-09-26","prev_start":"2004-09-18","prev_end":"2004-09-26"},
+    {"name":"Michael","lat_min":29.0,"lat_max":33.0,"lon_min":-86.5,"lon_max":-83.0,
+     "start":"2018-10-07","end":"2018-10-12","prev_start":"2017-10-07","prev_end":"2017-10-12"}
+]
+
+# -------------------------
+# USER VARIABLE
+# -------------------------
+variable = input("Enter variable (TMAX, TMIN, PRCP, TAVG): ").strip().upper()
+
+# -------------------------
+# FILES (must have these downloaded)
+# -------------------------
+station_file = 'ghcnd-stations.txt'
+inventory_file = 'ghcnd-inventory.txt'
+dly_folder = 'dly_files'
+os.makedirs(dly_folder, exist_ok=True)
+os.makedirs('output', exist_ok=True)
+
+# Check required GHCN files
+for req in [station_file, inventory_file]:
+    if not os.path.exists(req):
+        print(f"Missing required file: {req}\nDownload from https://www.ncei.noaa.gov/pub/data/ghcn/daily/")
+        raise SystemExit
+
+# -------------------------
+# Load inventory + stations
+# -------------------------
+inventory = pd.read_csv(inventory_file, sep=r'\s+', header=None,
+                        names=["ID","LAT","LON","ELEMENT","FIRSTYEAR","LASTYEAR"], engine='python')
+inventory['ID'] = inventory['ID'].astype(str).str.strip()
+
+station_data = []
+with open(station_file, 'r') as fh:
+    for line in fh:
+        sid = line[0:11].strip()
+        lat = float(line[12:20].strip())
+        lon = float(line[21:30].strip())
+        name = line[41:71].strip()
+        station_data.append((sid, lat, lon, name))
+station_df = pd.DataFrame(station_data, columns=['ID','LAT','LON','NAME'])
+station_df['ID'] = station_df['ID'].astype(str).str.strip()
+
+# -------------------------
+# Parse .dly function
+# -------------------------
+def parse_dly(filepath, variable, start_date, end_date):
+    days_dict = {}
+    try:
+        with open(filepath, 'r') as f:
+            for line in f:
+                if line[17:21] == variable:
+                    year = int(line[11:15])
+                    month = int(line[15:17])
+                    for i in range(31):
+                        try:
+                            val_str = line[21+i*8:26+i*8]
+                            val = int(val_str[:5])
+                            d = date(year, month, i+1)
+                            if start_date <= d <= end_date and val != -9999:
+                                days_dict[d] = 1
+                        except:
+                            continue
+    except Exception as e:
+        print("parse error:", e)
+    return days_dict
+
+# -------------------------
+# GIS utilities & fallback
+# -------------------------
+def haversine_km(lat1, lon1, lat2, lon2):
+    R = 6371.0
+    dlat = radians(lat2-lat1)
+    dlon = radians(lon2-lon1)
+    a = sin(dlat/2)**2 + cos(radians(lat1))*cos(radians(lat2))*sin(dlon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+    return R * c
+
+COAST_POINTS = [
+    (47.6, -122.3), (37.8, -122.4), (34.0, -118.2), (32.7, -117.1),
+    (29.76, -95.37), (30.3, -81.4), (25.8, -80.2), (27.8, -82.6),
+    (30.2, -89.2), (40.7, -74.0), (39.3, -76.6), (36.85, -75.98), (43.65, -70.25)
+]
+
+CITY_CENTROIDS = [
+    ("New York", 40.7128, -74.0060),
+    ("Philadelphia", 39.9526, -75.1652),
+    ("Baltimore", 39.2904, -76.6122),
+    ("Boston", 42.3601, -71.0589),
+    ("Miami", 25.7617, -80.1918),
+    ("Tampa", 27.9506, -82.4572),
+    ("Jacksonville", 30.3322, -81.6557),
+    ("Houston", 29.7604, -95.3698),
+    ("New Orleans",29.9511, -90.0715),
+    ("Tallahassee",30.4383, -84.2807),
+    ("Atlanta",33.7490, -84.3880)
+]
+
+def download_and_load_naturalearth():
+    try:
+        coast_url = "https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/10m/physical/ne_10m_coastline.zip"
+        urban_url = "https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/10m/cultural/ne_10m_urban_areas.zip"
+        tmpdir = "temp_naturalearth"
+        os.makedirs(tmpdir, exist_ok=True)
+        r = requests.get(coast_url, timeout=30); r.raise_for_status()
+        z = zipfile.ZipFile(io.BytesIO(r.content)); z.extractall(tmpdir)
+        coast_shps = [os.path.join(tmpdir,f) for f in os.listdir(tmpdir) if f.endswith('.shp')]
+        gdf_coast = gpd.read_file(coast_shps[0])
+        r2 = requests.get(urban_url, timeout=30); r2.raise_for_status()
+        z2 = zipfile.ZipFile(io.BytesIO(r2.content)); z2.extractall(tmpdir)
+        urban_shps = [os.path.join(tmpdir,f) for f in os.listdir(tmpdir) if f.endswith('.shp') and 'urban' in f.lower()]
+        if len(urban_shps) == 0:
+            urban_shps = [os.path.join(tmpdir,f) for f in os.listdir(tmpdir) if f.endswith('.shp')]
+        gdf_urban = gpd.read_file(urban_shps[0])
+        return gdf_coast, gdf_urban
+    except Exception as e:
+        print("Natural Earth download/load failed:", e)
+        return None, None
+
+def compute_distances_and_regions(stations_df, output_folder, coastal_km_thresh=50):
+    st = stations_df.copy().reset_index(drop=True)
+    if USE_GEOPANDAS:
+        try:
+            gdf_coast, gdf_urban = download_and_load_naturalearth()
+            if gdf_coast is not None:
+                gdf_coast_proj = gdf_coast.to_crs(epsg=3857)
+                coast_union = gdf_coast_proj.unary_union
+                pts = gpd.GeoDataFrame(st, geometry=[Point(xy) for xy in zip(st['LON'], st['LAT'])], crs="EPSG:4326")
+                pts_proj = pts.to_crs(epsg=3857)
+                dists_m = pts_proj.geometry.apply(lambda p: p.distance(coast_union))
+                distances = dists_m.values / 1000.0
+                if gdf_urban is not None:
+                    gdf_urban_proj = gdf_urban.to_crs(epsg=3857)
+                    pts_proj['in_urban'] = pts_proj.within(gdf_urban_proj.unary_union)
+                    in_urban = pts_proj['in_urban'].values
+                else:
+                    in_urban = np.array([False]*len(st))
+                regions = []
+                for i, d in enumerate(distances):
+                    if d <= coastal_km_thresh:
+                        regions.append('Coastal')
+                    else:
+                        if in_urban[i]:
+                            regions.append('Inland')
+                        else:
+                            regions.append('Rural')
+                st['Distance_to_Coast_km'] = distances
+                st['Region'] = regions
+                return st
+        except Exception as e:
+            print("GeoPandas method failed, falling back:", e)
+    dist_to_coast = []
+    is_urban = []
+    for idx, row in st.iterrows():
+        lat, lon = row['LAT'], row['LON']
+        min_d = min(haversine_km(lat, lon, cp[0], cp[1]) for cp in COAST_POINTS)
+        dist_to_coast.append(min_d)
+        urb = any(haversine_km(lat, lon, c[1], c[2]) <= 30 for c in CITY_CENTROIDS)
+        is_urban.append(urb)
+    st['Distance_to_Coast_km'] = np.array(dist_to_coast)
+    regions = []
+    for i, d in enumerate(dist_to_coast):
+        if d <= coastal_km_thresh:
+            regions.append('Coastal')
+        else:
+            if is_urban[i]:
+                regions.append('Inland')
+            else:
+                regions.append('Rural')
+    st['Region'] = regions
+    pd.DataFrame({'ID':st['ID'],'Distance_to_Coast_km':st['Distance_to_Coast_km'],'Region':st['Region']}) \
+      .to_csv(os.path.join(output_folder, 'region_assignment_fallback.csv'), index=False)
+    return st
+
+# -------------------------
+# run_event_period
+# -------------------------
+def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, start_str, end_str):
+    output_folder = os.path.join('output', event_name, f"{start_str}_to_{end_str}")
+    os.makedirs(output_folder, exist_ok=True)
+    plots_folder = os.path.join(output_folder, "plots"); os.makedirs(plots_folder, exist_ok=True)
+    tables_folder = os.path.join(output_folder, "tables"); os.makedirs(tables_folder, exist_ok=True)
+
+    start_date = datetime.strptime(start_str, "%Y-%m-%d").date()
+    end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
+
+    inv_filtered = inventory[(inventory['ELEMENT']==variable) &
+                             (inventory['FIRSTYEAR'] <= start_date.year) &
+                             (inventory['LASTYEAR'] >= end_date.year)]
+
+    stations = station_df[(station_df['LAT'] >= lat_min) & (station_df['LAT'] <= lat_max) &
+                          (station_df['LON'] >= lon_min) & (station_df['LON'] <= lon_max)]
+    stations = pd.merge(stations, inv_filtered[['ID']], on='ID', how='inner')
+
+    base_url = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/all"
+    for sid in stations['ID'].unique():
+        dest = os.path.join(dly_folder, f"{sid}.dly")
+        if not os.path.exists(dest):
+            try:
+                r = requests.get(f"{base_url}/{sid}.dly", timeout=30)
+                if r.status_code == 200:
+                    with open(dest, 'wb') as fh:
+                        fh.write(r.content)
+            except Exception:
+                pass
+
+    date_list = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
+    total = np.zeros(len(date_list)); valid = np.zeros(len(date_list))
+    missing_station_ids = [[] for _ in range(len(date_list))]
+
+    for sid in stations['ID'].unique():
+        path = os.path.join(dly_folder, f"{sid}.dly")
+        if os.path.exists(path):
+            vals = parse_dly(path, variable, start_date, end_date)
+            for i, d in enumerate(date_list):
+                total[i] += 1
+                if d in vals:
+                    valid[i] += 1
+                else:
+                    missing_station_ids[i].append(sid)
+
+    summary = pd.DataFrame({
+        'Date': [d.strftime("%Y-%m-%d") for d in date_list],
+        'Stations Reporting': valid.astype(int),
+        'Stations Missing': (total - valid).astype(int),
+        'Total Stations': total.astype(int),
+        '% Missing': np.round((1 - valid / total) * 100, 1),
+        'Missing Station IDs': [','.join(ids) if ids else '' for ids in missing_station_ids]
+    })
+    summary.to_csv(os.path.join(output_folder, 'missing_summary.csv'), index=False)
+
+    records = []
+    for sid in stations['ID'].unique():
+        path = os.path.join(dly_folder, f"{sid}.dly")
+        if os.path.exists(path):
+            vals = parse_dly(path, variable, start_date, end_date)
+            total_days = len(date_list)
+            missing_days = sum(1 for d in date_list if d not in vals)
+            info = stations[stations['ID'] == sid].iloc[0]
+            missing_pct = round((missing_days / total_days) * 100, 2)
+            records.append({'ID': sid, 'LAT': info['LAT'], 'LON': info['LON'], 'NAME': info['NAME'],
+                            'Total Days': total_days, 'Missing Days': missing_days, 'Missing %': missing_pct})
+
+    station_missing_df = pd.DataFrame(records)
+    station_missing_df.to_csv(os.path.join(output_folder, 'stations_with_missing_data.csv'), index=False)
+
+    region_df = compute_distances_and_regions(stations[['ID','LAT','LON','NAME']], output_folder, coastal_km_thresh=50)
+    station_missing_df = station_missing_df.merge(region_df[['ID','Distance_to_Coast_km','Region']], on='ID', how='left')
+    station_missing_df.to_csv(os.path.join(output_folder, 'stations_with_missing_data_region.csv'), index=False)
+
+    # Stats
+    out_lines = []
+    out_lines.append(f"Event: {event_name} {start_str} to {end_str}")
+    out_lines.append(f"Stations considered: {len(station_missing_df)}")
+    out_lines.append("")
+
+    if len(station_missing_df) >= 3:
+        corr_lat = station_missing_df['LAT'].corr(station_missing_df['Missing %'])
+        corr_lon = station_missing_df['LON'].corr(station_missing_df['Missing %'])
+        out_lines.append(f"Pearson correlation: LAT vs Missing% = {corr_lat:.3f}; LON vs Missing% = {corr_lon:.3f}")
+        if USE_SCIPY:
+            rho, p_rho = spearmanr(station_missing_df['Distance_to_Coast_km'], station_missing_df['Missing %'])
+            tau, p_tau = kendalltau(station_missing_df['Distance_to_Coast_km'], station_missing_df['Missing %'])
+            out_lines.append(f"Spearman (distance->missing) rho={rho:.3f}, p={p_rho:.3f}")
+            out_lines.append(f"Kendall tau={tau:.3f}, p={p_tau:.3f}")
+    else:
+        out_lines.append("Not enough stations for correlations.")
+
+    # Region stats table
+    region_stats = station_missing_df.groupby('Region')['Missing %'].agg(['mean','std','count']).reset_index()
+    region_stats.to_csv(os.path.join(tables_folder, 'region_missing_stats.csv'), index=False)
+
+    # Statistical tests (ANOVA, Kruskal, pairwise, chi-square)
+    test_results = []
+    groups = {r: station_missing_df[station_missing_df['Region']==r]['Missing %'].dropna().values
+              for r in station_missing_df['Region'].unique()}
+
+    if USE_SCIPY and len(groups) >= 2 and all(len(v) >= 2 for v in groups.values()):
+        try:
+            anova_stat, anova_p = f_oneway(*groups.values())
+            test_results.append({'test':'ANOVA','stat':anova_stat,'p':anova_p})
+        except Exception:
+            pass
+        try:
+            kw_stat, kw_p = kruskal(*groups.values())
+            test_results.append({'test':'Kruskal','stat':kw_stat,'p':kw_p})
+        except Exception:
+            pass
+
+    # Pairwise Coastal vs Rural/Inland t-test + MWU
+    if 'Coastal' in groups and 'Rural' in groups:
+        g_coastal = groups['Coastal']; g_rural = groups['Rural']
+        if USE_SCIPY and len(g_coastal)>=2 and len(g_rural)>=2:
+            t_stat, t_p = ttest_ind(g_coastal, g_rural, equal_var=False)
+            test_results.append({'test':'Ttest_Coastal_vs_Rural','stat':t_stat,'p':t_p})
+            mw_stat, mw_p = mannwhitneyu(g_coastal, g_rural, alternative='two-sided')
+            test_results.append({'test':'MannWhitney_Coastal_vs_Rural','stat':mw_stat,'p':mw_p})
+    if 'Coastal' in groups and 'Inland' in groups:
+        g_coastal = groups['Coastal']; g_inland = groups['Inland']
+        if USE_SCIPY and len(g_coastal)>=2 and len(g_inland)>=2:
+            t_stat2, t_p2 = ttest_ind(g_coastal, g_inland, equal_var=False)
+            test_results.append({'test':'Ttest_Coastal_vs_Inland','stat':t_stat2,'p':t_p2})
+            mw_stat2, mw_p2 = mannwhitneyu(g_coastal, g_inland, alternative='two-sided')
+            test_results.append({'test':'MannWhitney_Coastal_vs_Inland','stat':mw_stat2,'p':mw_p2})
+
+    # Chi-square contingency
+    try:
+        median_missing = station_missing_df['Missing %'].median()
+        station_missing_df['MissingCat'] = np.where(station_missing_df['Missing %'] > median_missing, 'High', 'Low')
+        contingency = pd.crosstab(station_missing_df['Region'], station_missing_df['MissingCat'])
+        if USE_SCIPY and contingency.shape[0] > 1 and contingency.shape[1] > 1:
+            chi2, p_chi, dof, exp = chi2_contingency(contingency)
+            test_results.append({'test':'ChiSquare_region_vs_missingcat','stat':chi2,'p':p_chi})
+    except Exception:
+        pass
+
+    tests_df = pd.DataFrame(test_results)
+    tests_df.to_csv(os.path.join(tables_folder, 'statistical_tests_results.csv'), index=False)
+
+    # PLOTS: box/violin/scatter/heatmap
+    if not station_missing_df.empty:
+        if USE_SEABORN:
+            sns.set(style="whitegrid")
+            plt.figure(figsize=(8,6))
+            sns.boxplot(data=station_missing_df, x="Region", y="Missing %")
+            plt.title(f"{event_name}: Missing % by Region")
+            plt.tight_layout(); plt.savefig(os.path.join(plots_folder, 'boxplot_missing_by_region.png')); plt.close()
+
+            plt.figure(figsize=(8,6))
+            sns.violinplot(data=station_missing_df, x="Region", y="Missing %")
+            plt.title(f"{event_name}: Missing % distribution by Region")
+            plt.tight_layout(); plt.savefig(os.path.join(plots_folder, 'violin_missing_by_region.png')); plt.close()
+        else:
+            plt.figure(figsize=(8,6))
+            station_missing_df.boxplot(column='Missing %', by='Region')
+            plt.title(f"{event_name}: Missing % by Region"); plt.suptitle("")
+            plt.tight_layout(); plt.savefig(os.path.join(plots_folder, 'boxplot_missing_by_region.png')); plt.close()
+
+        # scatter lat/lon heatmap / colored points
+        plt.figure(figsize=(8,6))
+        sc = plt.scatter(station_missing_df['LON'], station_missing_df['LAT'], c=station_missing_df['Missing %'], s=40, cmap='Reds', edgecolor='k', linewidth=0.2)
+        plt.colorbar(sc, label='% Missing')
+        plt.title(f"{event_name}: Spatial Missing % (points colored by % Missing)")
+        plt.xlabel('Longitude'); plt.ylabel('Latitude'); plt.tight_layout()
+        plt.savefig(os.path.join(plots_folder, 'spatial_scatter_missing.png')); plt.close()
+
+        # heatmap interpolation if scipy available
+        try:
+            if USE_SCIPY:
+                xi = np.linspace(station_missing_df['LON'].min(), station_missing_df['LON'].max(), 200)
+                yi = np.linspace(station_missing_df['LAT'].min(), station_missing_df['LAT'].max(), 200)
+                Xi, Yi = np.meshgrid(xi, yi)
+                Zi = griddata((station_missing_df['LON'], station_missing_df['LAT']), station_missing_df['Missing %'], (Xi, Yi), method='linear')
+                plt.figure(figsize=(8,6))
+                plt.contourf(Xi, Yi, Zi, levels=14, cmap='Reds', alpha=0.8)
+                plt.scatter(station_missing_df['LON'], station_missing_df['LAT'], c=station_missing_df['Missing %'], s=20, cmap='Reds', edgecolor='k', linewidth=0.2)
+                plt.colorbar(label='% Missing')
+                plt.title(f"{event_name}: Interpolated Heatmap of % Missing")
+                plt.xlabel('Longitude'); plt.ylabel('Latitude'); plt.tight_layout()
+                plt.savefig(os.path.join(plots_folder, 'heatmap_interpolated_missing.png')); plt.close()
+        except Exception:
+            pass
+
+    # Save interpretation text
+    with open(os.path.join(output_folder, 'interpretation_summary.txt'), 'w') as fh:
+        fh.write("\n".join(out_lines))
+    # return
+    return station_missing_df, summary, region_stats, tests_df, plots_folder, tables_folder
+
+# -------------------------
+# Batch runner: before/after + merge + resilience metrics + dashboard
+# -------------------------
+def compute_network_metrics(before_df, after_df):
+    # define failed if Missing % >= 50
+    thr = 50.0
+    def failure_mask(df):
+        if df is None or df.empty: return pd.DataFrame(columns=['ID','LAT','LON','Failed'])
+        m = df.copy()
+        m['Failed'] = m['Missing %'] >= thr
+        return m[['ID','LAT','LON','Failed']]
+    b = failure_mask(before_df); a = failure_mask(after_df)
+    # coverage loss: proportion failed
+    def coverage(df):
+        if df is None or df.empty: return np.nan
+        return df['Failed'].sum() / len(df)
+    coverage_before = coverage(b); coverage_after = coverage(a)
+    # redundancy ratio = total / (# failed + 1e-9)
+    def redundancy(df):
+        if df is None or df.empty: return np.nan
+        total = len(df)
+        failed = df['Failed'].sum()
+        return total / (failed + 1e-9)
+    redundancy_before = redundancy(b); redundancy_after = redundancy(a)
+    # mean nearest-working distance: for each failed station, distance to nearest non-failed station
+    def mean_nearest_distance(df):
+        if df is None or df.empty: return np.nan
+        coords = df[['ID','LAT','LON','Failed']].copy()
+        failed = coords[coords['Failed']]
+        working = coords[~coords['Failed']]
+        if failed.empty or working.empty: return np.nan
+        dlist = []
+        for _, f in failed.iterrows():
+            latf, lonf = f['LAT'], f['LON']
+            dmin = working.apply(lambda r: haversine_km(latf, lonf, r['LAT'], r['LON']), axis=1).min()
+            dlist.append(dmin)
+        return np.mean(dlist) if dlist else np.nan
+    mean_nd_before = mean_nearest_distance(b); mean_nd_after = mean_nearest_distance(a)
+    # return dict
+    return {
+        'coverage_before': coverage_before,
+        'coverage_after': coverage_after,
+        'redundancy_before': redundancy_before,
+        'redundancy_after': redundancy_after,
+        'mean_nearest_distance_before_km': mean_nd_before,
+        'mean_nearest_distance_after_km': mean_nd_after,
+        'coverage_delta': (coverage_after - coverage_before) if (not np.isnan(coverage_before) and not np.isnan(coverage_after)) else np.nan,
+        'redundancy_delta': (redundancy_after - redundancy_before) if (not np.isnan(redundancy_before) and not np.isnan(redundancy_after)) else np.nan,
+        'mean_nearest_distance_delta_km': (mean_nd_after - mean_nd_before) if (not np.isnan(mean_nd_before) and not np.isnan(mean_nd_after)) else np.nan
+    }
+
+all_event_summaries = []
+all_region_rows = []
+dashboard_entries = []
+
+for case in case_studies:
+    name = case['name']
+    out_folder_event = os.path.join('output', name)
+    os.makedirs(out_folder_event, exist_ok=True)
+
+    before_df, before_summary, before_region, before_tests, before_plots, before_tables = run_event_period(
+        name, variable, case['lat_min'], case['lat_max'], case['lon_min'], case['lon_max'], case['prev_start'], case['prev_end'])
+
+    after_df, after_summary, after_region, after_tests, after_plots, after_tables = run_event_period(
+        name, variable, case['lat_min'], case['lat_max'], case['lon_min'], case['lon_max'], case['start'], case['end'])
+
+    merged = before_df.merge(after_df, on=['ID','LAT','LON','NAME'], how='outer', suffixes=('_Before','_After'))
+    merged.to_csv(os.path.join(out_folder_event, 'Before_vs_After_station_missing.csv'), index=False)
+
+    compare_summary = pd.DataFrame([{
+        'Event': name,
+        'Before_mean_missing': before_df['Missing %'].mean() if not before_df.empty else np.nan,
+        'After_mean_missing': after_df['Missing %'].mean() if not after_df.empty else np.nan,
+        'Delta_mean_missing': (after_df['Missing %'].mean() - before_df['Missing %'].mean()) if (not after_df.empty and not before_df.empty) else np.nan
+    }])
+    compare_summary.to_csv(os.path.join(out_folder_event, 'before_after_summary.csv'), index=False)
+    all_event_summaries.append(compare_summary)
+
+    # compute network metrics
+    net_metrics = compute_network_metrics(before_df, after_df)
+    net_df = pd.DataFrame([net_metrics])
+    net_df.to_csv(os.path.join(out_folder_event, 'network_resilience_metrics.csv'), index=False)
+
+    # Collect region stats for aggregate
+    brf = pd.read_csv(os.path.join(out_folder_event, f"{case['prev_start']}_to_{case['prev_end']}/tables/region_missing_stats.csv")) if os.path.exists(os.path.join(out_folder_event, f"{case['prev_start']}_to_{case['prev_end']}/tables/region_missing_stats.csv")) else None
+    arf = pd.read_csv(os.path.join(out_folder_event, f"{case['start']}_to_{case['end']}/tables/region_missing_stats.csv")) if os.path.exists(os.path.join(out_folder_event, f"{case['start']}_to_{case['end']}/tables/region_missing_stats.csv")) else None
+    if brf is not None:
+        brf['Event'] = name; brf['Period'] = 'Before'; all_region_rows.append(brf)
+    if arf is not None:
+        arf['Event'] = name; arf['Period'] = 'After'; all_region_rows.append(arf)
+
+    # dashboard info
+    dashboard_entries.append({
+        'event': name,
+        'folder': out_folder_event,
+        'before_summary': os.path.join(out_folder_event, 'before_after_summary.csv'),
+        'network_metrics': os.path.join(out_folder_event, 'network_resilience_metrics.csv'),
+        'plots_folder': os.path.join(out_folder_event, f"{case['start']}_to_{case['end']}/plots")
+    })
+
+# aggregate
+if all_event_summaries:
+    event_summaries = pd.concat(all_event_summaries, ignore_index=True)
+    event_summaries.to_csv("output/CaseStudy_Before_After_Comparison_All.csv", index=False)
+if all_region_rows:
+    region_all = pd.concat(all_region_rows, ignore_index=True)
+    region_all.to_csv("output/CaseStudy_Region_Comparison_All.csv", index=False)
+
+# Aggregate plots: Before vs After main comparison
+try:
+    event_summ = pd.read_csv("output/CaseStudy_Before_After_Comparison_All.csv")
+    plt.figure(figsize=(10,6))
+    x = np.arange(len(event_summ))
+    w = 0.35
+    plt.bar(x - w/2, event_summ['Before_mean_missing'], width=w, label='Before')
+    plt.bar(x + w/2, event_summ['After_mean_missing'], width=w, label='After')
+    plt.xticks(x, event_summ['Event'])
+    plt.ylabel("Mean % Missing Data")
+    plt.title("Station Data Loss Before vs After Storm Events")
+    plt.legend(); plt.tight_layout()
+    plt.savefig("output/Before_vs_After_Main_Comparison.png"); plt.close()
+except Exception:
+    pass
+
+# Coastal vs Rural across case studies
+try:
+    region_all = pd.read_csv("output/CaseStudy_Region_Comparison_All.csv")
+    region_subset = region_all[region_all["Region"].isin(["Coastal","Rural"])]
+    plt.figure(figsize=(10,6))
+    for event in region_subset["Event"].unique():
+        sub = region_subset[(region_subset["Event"] == event) & (region_subset["Period"] == "After")]
+        plt.scatter(sub["Region"], sub["mean"], label=event, s=80)
+    plt.ylabel("Mean % Missing Data (After Event)")
+    plt.title("Coastal vs Rural Data Loss Across Case Studies (After Storms)")
+    plt.legend(); plt.tight_layout()
+    plt.savefig("output/Coastal_vs_Rural_Across_Case_Studies.png"); plt.close()
+except Exception:
+    pass
+
+# -------------------------
+# Generate a simple HTML dashboard
+# -------------------------
+def make_dashboard_html(entries):
+    html = ["<html><head><meta charset='utf-8'><title>Hurricane Station Reliability Dashboard</title></head><body>"]
+    html.append("<h1>Hurricane Station Reliability — Dashboard</h1>")
+    html.append("<p>Variable: {}</p>".format(variable))
+    html.append("<h2>Summary Plots</h2>")
+    if os.path.exists("output/Before_vs_After_Main_Comparison.png"):
+        html.append("<h3>Before vs After — All Events</h3>")
+        html.append("<img src='Before_vs_After_Main_Comparison.png' width=800/>")
+    if os.path.exists("output/Coastal_vs_Rural_Across_Case_Studies.png"):
+        html.append("<h3>Coastal vs Rural — After Events</h3>")
+        html.append("<img src='Coastal_vs_Rural_Across_Case_Studies.png' width=800/>")
+    html.append("<hr/>")
+    for e in entries:
+        html.append(f"<h2>{e['event']}</h2>")
+        # links to key files
+        before_path = os.path.join(e['folder'], 'before_after_summary.csv')
+        net_path = os.path.join(e['folder'], 'network_resilience_metrics.csv')
+        merged_path = os.path.join(e['folder'], 'Before_vs_After_station_missing.csv')
+        html.append("<ul>")
+        if os.path.exists(before_path):
+            html.append(f"<li><a href='{os.path.relpath(before_path, start='output')}'>Before/After summary (CSV)</a></li>")
+        if os.path.exists(net_path):
+            html.append(f"<li><a href='{os.path.relpath(net_path, start='output')}'>Network resilience metrics (CSV)</a></li>")
+        if os.path.exists(merged_path):
+            html.append(f"<li><a href='{os.path.relpath(merged_path, start='output')}'>Station Before vs After (CSV)</a></li>")
+        # embed plot images if exist
+        plots_dir = os.path.join(e['folder'], f"{case_studies[0]['start']}_to_{case_studies[0]['end']}")
+        # find plots folder under event
+        pglob = glob.glob(os.path.join(e['folder'], "**", "plots"), recursive=True)
+        if pglob:
+            pf = pglob[0]
+            imgs = glob.glob(os.path.join(pf, "*.png"))
+            for img in imgs[:6]:
+                rel = os.path.relpath(img, start='output')
+                html.append(f"<div style='display:inline-block;margin:5px;'><img src='{rel}' width=300/><br/><small>{os.path.basename(img)}</small></div>")
+        html.append("</ul><hr/>")
+    html.append("</body></html>")
+    return "\n".join(html)
+
+dashboard_html = make_dashboard_html(dashboard_entries)
+with open(os.path.join("output", "dashboard.html"), 'w') as fh:
+    fh.write(dashboard_html)
+
+print("Done. Outputs are in the 'output' folder (CSV, plots, heatmaps, dashboard.html).")
