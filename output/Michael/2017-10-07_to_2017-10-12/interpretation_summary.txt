@@ -2,5 +2,5 @@ Event: Michael 2017-10-07 to 2017-10-12
 Stations considered: 283
 
 Pearson correlation: LAT vs Missing% = -0.016; LON vs Missing% = -0.015
-Spearman (distance->missing) rho=-0.006, p=0.925
-Kendall tau=-0.005, p=0.912
+Spearman (distance->missing) rho=0.024, p=0.682
+Kendall tau=0.017, p=0.699
