@@ -2,5 +2,5 @@ Event: Sandy 2012-10-25 to 2012-11-05
 Stations considered: 622
 
 Pearson correlation: LAT vs Missing% = -0.050; LON vs Missing% = 0.010
-Spearman (distance->missing) rho=-0.102, p=0.011
-Kendall tau=-0.075, p=0.011
+Spearman (distance->missing) rho=-0.109, p=0.006
+Kendall tau=-0.080, p=0.006

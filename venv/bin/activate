@@ -37,7 +37,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="/Users/mabel/weatherStationReliability/venv"
+VIRTUAL_ENV="/Users/mabel/CS Projects/weatherStationReliability/venv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

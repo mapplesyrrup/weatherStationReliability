@@ -3,4 +3,4 @@ Stations considered: 797
 
 Pearson correlation: LAT vs Missing% = 0.017; LON vs Missing% = -0.135
 Spearman (distance->missing) rho=0.087, p=0.014
-Kendall tau=0.070, p=0.014
+Kendall tau=0.070, p=0.015
