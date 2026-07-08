@@ -240,7 +240,7 @@ def compute_distances_and_regions(stations_df, output_folder, coastal_km_thresh=
 
 
 # run_event_period
-
+##
 def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, start_str, end_str):
     output_folder = os.path.join('output', event_name, f"{start_str}_to_{end_str}")
     os.makedirs(output_folder, exist_ok=True)
