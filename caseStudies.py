@@ -1,5 +1,3 @@
-# batch_run_with_dashboard.py
-# Full batch-run script with stats, network-resilience metrics, heatmaps and HTML dashboard.
 import os
 import io
 import zipfile
@@ -11,24 +9,24 @@ from datetime import datetime, timedelta, date
 from math import radians, sin, cos, sqrt, atan2
 import glob
 
-# Always run from the project directory regardless of where python was launched from
+
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-# Optional libs
+
 USE_GEOPANDAS = True
 try:
     import geopandas as gpd
     from shapely.geometry import Point
 except Exception:
     USE_GEOPANDAS = False
-    print("GeoPandas not available — using fallback methods.")
+    print("GeoPandas not available")
 
 USE_SEABORN = True
 try:
     import seaborn as sns
 except Exception:
     USE_SEABORN = False
-    print("Seaborn not available — using matplotlib alone.")
+    print("Seaborn not available")
 
 USE_SCIPY = True
 try:
@@ -37,11 +35,11 @@ try:
     from scipy.interpolate import griddata
 except Exception:
     USE_SCIPY = False
-    print("SciPy not available — some statistical/heatmap features will fallback or be limited.")
+    print("SciPy not available")
 
-# -------------------------
+
 # CASE STUDIES
-# -------------------------
+
 case_studies = [
     {"name": "Sandy",
      "lat_min": 39.5, "lat_max": 42.5, "lon_min": -75.5, "lon_max": -72.0,
@@ -65,14 +63,11 @@ case_studies = [
      "prev_start": "2017-10-07", "prev_end": "2017-10-12"},
 ]
 
-# -------------------------
+
 # USER VARIABLE
-# -------------------------
 variable = input("Enter variable (TMAX, TMIN, PRCP, TAVG): ").strip().upper()
 
-# -------------------------
 # FILES
-# -------------------------
 station_file   = 'ghcnd-stations.txt'
 inventory_file = 'ghcnd-inventory.txt'
 dly_folder     = 'dly_files'
@@ -85,9 +80,7 @@ for req in [station_file, inventory_file]:
               f"Download from https://www.ncei.noaa.gov/pub/data/ghcn/daily/")
         raise SystemExit
 
-# -------------------------
 # Load inventory + stations
-# -------------------------
 print("Loading station inventory...")
 inventory = pd.read_csv(
     inventory_file, sep=r'\s+', header=None,
@@ -108,9 +101,7 @@ station_df = pd.DataFrame(station_data, columns=['ID', 'LAT', 'LON', 'NAME'])
 station_df['ID'] = station_df['ID'].astype(str).str.strip()
 print(f"Loaded {len(station_df)} stations.")
 
-# -------------------------
-# Parse .dly function
-# -------------------------
+# parse dly
 def parse_dly(filepath, variable, start_date, end_date):
     days_dict = {}
     try:
@@ -132,9 +123,6 @@ def parse_dly(filepath, variable, start_date, end_date):
         print(f"  parse error ({filepath}): {e}")
     return days_dict
 
-# -------------------------
-# Download helper with retries
-# -------------------------
 def download_dly(sid, base_url, dest, retries=3, timeout=45):
     for attempt in range(1, retries + 1):
         try:
@@ -154,9 +142,7 @@ def download_dly(sid, base_url, dest, retries=3, timeout=45):
     print(f"  [{sid}] Giving up after {retries} attempts — skipping.")
     return False
 
-# -------------------------
-# GIS utilities & fallback
-# -------------------------
+#GIS
 def haversine_km(lat1, lon1, lat2, lon2):
     R    = 6371.0
     dlat = radians(lat2 - lat1)
@@ -283,9 +269,7 @@ def compute_distances_and_regions(stations_df, output_folder, coastal_km_thresh=
     }).to_csv(os.path.join(output_folder, 'region_assignment_fallback.csv'), index=False)
     return st
 
-# -------------------------
 # run_event_period
-# -------------------------
 def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, start_str, end_str):
     print(f"\n--- Running: {event_name} | {start_str} to {end_str} ---")
 
@@ -325,10 +309,10 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
             print(f"    {i}/{len(need_download)} downloaded...")
         download_dly(sid, base_url, dest)
 
-    date_list           = [start_date + timedelta(days=i)
+    date_list = [start_date + timedelta(days=i)
                            for i in range((end_date - start_date).days + 1)]
-    total               = np.zeros(len(date_list))
-    valid               = np.zeros(len(date_list))
+    total= np.zeros(len(date_list))
+    valid= np.zeros(len(date_list))
     missing_station_ids = [[] for _ in range(len(date_list))]
 
     print("  Analysing missing data per day...")
@@ -384,7 +368,7 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
     station_missing_df.to_csv(
         os.path.join(output_folder, 'stations_with_missing_data_region.csv'), index=False)
 
-    # Stats
+    # stats
     out_lines = [
         f"Event: {event_name} {start_str} to {end_str}",
         f"Stations considered: {len(station_missing_df)}",
@@ -538,9 +522,7 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
     print(f"  Done: {event_name} {start_str} to {end_str}")
     return station_missing_df, summary, region_stats, tests_df, plots_folder, tables_folder
 
-# -------------------------
-# Network resilience metrics
-# -------------------------
+# network resilience metrics
 def compute_network_metrics(before_df, after_df):
     thr = 50.0
 
@@ -607,15 +589,14 @@ def compute_network_metrics(before_df, after_df):
         'mean_nearest_distance_delta_km':   safe_delta(mnd_b, mnd_a),
     }
 
-# -------------------------
-# Batch loop
-# -------------------------
+# batch loop
+
 all_event_summaries = []
 all_region_rows     = []
 dashboard_entries   = []
 
 for case in case_studies:
-    name             = case['name']
+    name= case['name']
     out_folder_event = os.path.join('output', name)
     os.makedirs(out_folder_event, exist_ok=True)
 
@@ -678,9 +659,7 @@ for case in case_studies:
         'plots_folder':    after_plots,
     })
 
-# -------------------------
-# Aggregate CSVs
-# -------------------------
+# CSV
 print("\nWriting aggregate CSVs...")
 if all_event_summaries:
     pd.concat(all_event_summaries, ignore_index=True).to_csv(
@@ -690,9 +669,7 @@ if all_region_rows:
     pd.concat(all_region_rows, ignore_index=True).to_csv(
         "output/CaseStudy_Region_Comparison_All.csv", index=False)
 
-# -------------------------
-# Aggregate plots
-# -------------------------
+# Plots
 print("Generating aggregate plots...")
 try:
     event_summ = pd.read_csv("output/CaseStudy_Before_After_Comparison_All.csv")
@@ -728,9 +705,7 @@ try:
 except Exception as e:
     print(f"  Coastal/rural plot failed: {e}")
 
-# -------------------------
 # HTML dashboard
-# -------------------------
 def make_dashboard_html(entries):
     html = [
         "<html><head><meta charset='utf-8'>",
@@ -752,9 +727,9 @@ def make_dashboard_html(entries):
     for e in entries:
         html.append(f"<h2>{e['event']}</h2><ul>")
         for label, path in [
-            ("Before/After summary (CSV)",      os.path.join(e['folder'], 'before_after_summary.csv')),
+            ("Before/After summary (CSV)", os.path.join(e['folder'], 'before_after_summary.csv')),
             ("Network resilience metrics (CSV)", os.path.join(e['folder'], 'network_resilience_metrics.csv')),
-            ("Station Before vs After (CSV)",    os.path.join(e['folder'], 'Before_vs_After_station_missing.csv')),
+            ("Station Before vs After (CSV)",os.path.join(e['folder'], 'Before_vs_After_station_missing.csv')),
         ]:
             if os.path.exists(path):
                 rel = os.path.relpath(path, start='output')
@@ -780,4 +755,4 @@ print("Writing dashboard.html...")
 with open(os.path.join("output", "dashboard.html"), 'w') as fh:
     fh.write(make_dashboard_html(dashboard_entries))
 
-print("\nDone. Outputs are in the 'output' folder (CSV, plots, heatmaps, dashboard.html).")
+print("\nDone. Outputs are in the 'output' folder. ")
