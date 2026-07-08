@@ -2,5 +2,5 @@ Event: Rita 2005-09-18 to 2005-09-26
 Stations considered: 803
 
 Pearson correlation: LAT vs Missing% = -0.065; LON vs Missing% = -0.044
-Spearman (distance->missing) rho=-0.140, p=0.000
-Kendall tau=-0.113, p=0.000
+Spearman (distance->missing) rho=-0.142, p=0.000
+Kendall tau=-0.112, p=0.000

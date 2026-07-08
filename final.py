@@ -1,5 +1,4 @@
-# batch_run_with_dashboard.py
-# Full batch-run script with stats, network-resilience metrics, heatmaps and HTML dashboard.
+
 import os
 import io
 import zipfile
@@ -12,7 +11,7 @@ from math import radians, sin, cos, sqrt, atan2
 import glob
 
 
-# Optional libs
+
 USE_GEOPANDAS = True
 try:
     import geopandas as gpd
@@ -36,9 +35,8 @@ except Exception:
     USE_SCIPY = False
     print("SciPy not available — some statistical/heatmap features will fallback or be limited.")
 
-# -------------------------
 # CASE STUDIES
-# -------------------------
+
 case_studies = [
     {"name":"Sandy","lat_min":39.5,"lat_max":42.5,"lon_min":-75.5,"lon_max":-72.0,
      "start":"2012-10-25","end":"2012-11-05","prev_start":"2011-10-25","prev_end":"2011-11-05"},
@@ -52,14 +50,13 @@ case_studies = [
      "start":"2018-10-07","end":"2018-10-12","prev_start":"2017-10-07","prev_end":"2017-10-12"}
 ]
 
-# -------------------------
+
 # USER VARIABLE
-# -------------------------
+
 variable = input("Enter variable (TMAX, TMIN, PRCP, TAVG): ").strip().upper()
 
-# -------------------------
-# FILES (must have these downloaded)
-# -------------------------
+# FILES 
+
 station_file = 'ghcnd-stations.txt'
 inventory_file = 'ghcnd-inventory.txt'
 dly_folder = 'dly_files'
@@ -72,9 +69,8 @@ for req in [station_file, inventory_file]:
         print(f"Missing required file: {req}\nDownload from https://www.ncei.noaa.gov/pub/data/ghcn/daily/")
         raise SystemExit
 
-# -------------------------
 # Load inventory + stations
-# -------------------------
+
 inventory = pd.read_csv(inventory_file, sep=r'\s+', header=None,
                         names=["ID","LAT","LON","ELEMENT","FIRSTYEAR","LASTYEAR"], engine='python')
 inventory['ID'] = inventory['ID'].astype(str).str.strip()
@@ -90,9 +86,9 @@ with open(station_file, 'r') as fh:
 station_df = pd.DataFrame(station_data, columns=['ID','LAT','LON','NAME'])
 station_df['ID'] = station_df['ID'].astype(str).str.strip()
 
-# -------------------------
+
 # Parse .dly function
-# -------------------------
+
 def parse_dly(filepath, variable, start_date, end_date):
     days_dict = {}
     try:
@@ -114,9 +110,9 @@ def parse_dly(filepath, variable, start_date, end_date):
         print("parse error:", e)
     return days_dict
 
-# -------------------------
+
 # GIS utilities & fallback
-# -------------------------
+
 def haversine_km(lat1, lon1, lat2, lon2):
     R = 6371.0
     dlat = radians(lat2-lat1)
@@ -148,11 +144,11 @@ CITY_CENTROIDS = [
 def download_and_load_naturalearth():
     """Fixed Natural Earth URLs"""
     try:
-        # FIXED URLs - removed duplicate http
+        
         coast_url = "https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/10m/physical/ne_10m_coastline.zip"
         urban_url = "https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/10m/cultural/ne_10m_urban_areas.zip"
         
-        # Alternative: Direct CDN links (more reliable)
+       
         coast_url = "https://naciscdn.org/naturalearth/10m/physical/ne_10m_coastline.zip"
         urban_url = "https://naciscdn.org/naturalearth/10m/cultural/ne_10m_urban_areas.zip"
         
@@ -243,9 +239,9 @@ def compute_distances_and_regions(stations_df, output_folder, coastal_km_thresh=
       .to_csv(os.path.join(output_folder, 'region_assignment_fallback.csv'), index=False)
     return st
 
-# -------------------------
+
 # run_event_period
-# -------------------------
+
 def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, start_str, end_str):
     output_folder = os.path.join('output', event_name, f"{start_str}_to_{end_str}")
     os.makedirs(output_folder, exist_ok=True)
@@ -446,9 +442,6 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
     
     return station_missing_df, summary, region_stats, tests_df, plots_folder, tables_folder
 
-# -------------------------
-# Batch runner: before/after + merge + resilience metrics + dashboard
-# -------------------------
 def compute_network_metrics(before_df, after_df):
     # define failed if Missing % >= 50
     thr = 50.0
@@ -574,7 +567,6 @@ if all_region_rows:
     region_all = pd.concat(all_region_rows, ignore_index=True)
     region_all.to_csv("output/CaseStudy_Region_Comparison_All.csv", index=False)
 
-# Aggregate plots: Before vs After main comparison
 try:
     event_summ = pd.read_csv("output/CaseStudy_Before_After_Comparison_All.csv")
     plt.figure(figsize=(10,6))
@@ -615,9 +607,6 @@ try:
 except Exception as e:
     print(f"Failed to create coastal vs rural plot: {e}")
 
-# -------------------------
-# Generate a simple HTML dashboard - FIXED
-# -------------------------
 def make_dashboard_html(entries):
     html = ["<!DOCTYPE html><html><head><meta charset='utf-8'><title>Hurricane Station Reliability Dashboard</title>"]
     html.append("<style>")
@@ -655,7 +644,7 @@ def make_dashboard_html(entries):
         html.append(f"<div class='event-section'>")
         html.append(f"<h2>🌀 {e['event']}</h2>")
         
-        # links to key files
+   
         before_path = e['before_summary']
         net_path = e['network_metrics']
         merged_path = os.path.join(e['folder'], 'Before_vs_After_station_missing.csv')
@@ -673,7 +662,7 @@ def make_dashboard_html(entries):
             html.append(f"<li><a href='{rel_path}'>Station Before vs After (CSV)</a></li>")
         html.append("</ul>")
         
-        # Display network metrics if available
+      
         if os.path.exists(net_path):
             try:
                 net_data = pd.read_csv(net_path)
@@ -707,11 +696,11 @@ def make_dashboard_html(entries):
             except Exception as ex:
                 html.append(f"<p style='color: red;'>Error loading network metrics: {ex}</p>")
         
-        # embed plot images - FIXED: use actual case data
+ 
         html.append("<h3>📷 Visualizations</h3>")
         html.append("<div class='plot-gallery'>")
         
-        # After event plots (most important)
+
         if 'after_plots' in e and os.path.exists(e['after_plots']):
             imgs = sorted(glob.glob(os.path.join(e['after_plots'], "*.png")))
             for img in imgs[:8]:  # Show up to 8 plots
@@ -736,8 +725,8 @@ dashboard_path = os.path.join("output", "dashboard.html")
 with open(dashboard_path, 'w', encoding='utf-8') as fh:
     fh.write(dashboard_html)
 
-print(f"\n✅ Dashboard created: {dashboard_path}")
-print(f"✅ All outputs saved in 'output' folder")
+print(f"\n Dashboard created: {dashboard_path}")
+print(f" All outputs saved in 'output' folder")
 print("\n" + "="*60)
 print("ANALYSIS COMPLETE")
 print("="*60)
@@ -746,10 +735,6 @@ print(f"1. Open {dashboard_path} in your web browser")
 print(f"2. Review CSV files in output/ folder")
 print(f"3. Check individual event folders for detailed plots and statistics")
 print("\n" + "="*60)
-
-# ---------------------------------------------------------
-# BEFORE vs DURING HURRICANE COMPARISON
-# ---------------------------------------------------------
 
 import pandas as pd
 from scipy.stats import ttest_rel
@@ -825,12 +810,3 @@ def compare_before_after(event_name, before_csv, during_csv):
     print(out_df)
     print(f"Files saved in: {out_dir}")
     print("===========================================\n")
-
-# ---------------------------------------------------------
-# HOW TO CALL IT (example)
-# ---------------------------------------------------------
-# compare_before_after(
-#     "sandy",
-#     "output/sandy/stations_with_missing_data_PRCP_2011-10-25_to_2011-11-05.csv",
-#     "output/sandy/stations_with_missing_data_PRCP_2012-10-25_to_2012-11-05.csv"
-# )
