@@ -208,31 +208,101 @@ def build_synthetic_isd_dataset_for_case(case: dict, seed: int, lead_days: int =
 # STEP 3: leave-one-out train + guess
 # ----------------------------------------------------------------------
 
+def _score_lead_up_per_station(case_data: pd.DataFrame, trained) -> pd.DataFrame:
+    """Score one event's pre-landfall window and collapse to one row per
+    station: its max risk score, plus whether it was EVER labeled
+    'about to fail' in that window (station_positive) -- the same
+    aggregation used for the real guess, so calibration and application
+    are apples-to-apples."""
+    lead_up = case_data[case_data["timestamp"] < case_data["landfall_start"]]
+    scored = score_rows(lead_up, trained)
+    return (
+        scored.dropna(subset=["risk_score"])
+        .groupby("station_id")
+        .agg(max_risk_score=("risk_score", "max"),
+             station_positive=("label", "max"),
+             lat=("lat", "first"), lon=("lon", "first"))
+        .reset_index()
+    )
+
+
+def calibrate_threshold(all_case_data: dict, training_events: list) -> float:
+    """
+    Picks a risk threshold using ONLY the training storms (no leakage from
+    the held-out storm's true outcomes). Does a nested leave-one-out among
+    the training storms: for each one, train on the REST, score its own
+    lead-up window, and collect (max_risk_score, station_positive) pairs
+    at the station level -- the same unit the real guess is made at. Then
+    picks the threshold that maximizes F1 across all that pooled,
+    out-of-fold evidence.
+    """
+    from sklearn.metrics import f1_score
+
+    station_rows = []
+    for name in training_events:
+        inner_train_names = [n for n in training_events if n != name]
+        if not inner_train_names:
+            continue
+        inner_train_data = pd.concat([all_case_data[n] for n in inner_train_names], ignore_index=True)
+        inner_model = train_model(inner_train_data, kind="gradient_boosting")
+        per_station = _score_lead_up_per_station(all_case_data[name], inner_model)
+        station_rows.append(per_station)
+
+    if not station_rows:
+        return 0.5  # fallback, shouldn't normally happen with 5 events
+
+    pooled = pd.concat(station_rows, ignore_index=True)
+    if pooled["station_positive"].nunique() < 2:
+        # no positive/negative contrast to calibrate against -- fall back
+        # to flagging the top 20% highest-risk stations
+        return pooled["max_risk_score"].quantile(0.80)
+
+    scores = pooled["max_risk_score"].values
+    y = pooled["station_positive"].astype(int).values
+    candidates = np.unique(scores)
+    best_thr, best_f1 = candidates[0], -1.0
+    for thr in candidates:
+        preds = (scores > thr).astype(int)
+        f1 = f1_score(y, preds, zero_division=0)
+        if f1 > best_f1:
+            best_f1, best_thr = f1, thr
+    return float(best_thr)
+
+
 def guess_at_risk_stations(all_case_data: dict, held_out_event: str,
-                            risk_threshold: float = 0.5) -> pd.DataFrame:
+                            risk_threshold: float = None) -> tuple:
     """
     Trains on every event EXCEPT held_out_event, then scores held_out_event's
-    lead-up window (rows before landfall_start). Returns one row per station
-    in the held-out event with its max risk score and a guessed_at_risk flag.
+    lead-up window (rows before landfall_start). Returns:
+      - one row per station in the held-out event with its max risk score
+        and a guessed_at_risk flag
+      - the threshold that was used
+      - a DataFrame of feature importances from this fold's model
+
+    Threshold: if risk_threshold is None (default), it's calibrated by
+    calibrate_threshold() using ONLY the training storms via nested
+    leave-one-out -- the held-out storm's true outcomes are never touched
+    until the final comparison step.
     """
     train_frames = [df for name, df in all_case_data.items() if name != held_out_event]
     train_data = pd.concat(train_frames, ignore_index=True)
     trained = train_model(train_data, kind="gradient_boosting")
 
-    held_out = all_case_data[held_out_event]
-    lead_up = held_out[held_out["timestamp"] < held_out["landfall_start"]]
-    scored = score_rows(lead_up, trained)
+    importances = pd.DataFrame({
+        "feature": trained.feature_cols,
+        "importance": trained.model.feature_importances_,
+    }).sort_values("importance", ascending=False)
+    importances["held_out_event"] = held_out_event
 
-    per_station = (
-        scored.dropna(subset=["risk_score"])
-        .groupby("station_id")
-        .agg(max_risk_score=("risk_score", "max"),
-             lat=("lat", "first"), lon=("lon", "first"))
-        .reset_index()
-    )
+    if risk_threshold is None:
+        training_events = [n for n in all_case_data if n != held_out_event]
+        risk_threshold = calibrate_threshold(all_case_data, training_events)
+
+    per_station = _score_lead_up_per_station(all_case_data[held_out_event], trained)
     per_station["guessed_at_risk"] = per_station["max_risk_score"] > risk_threshold
     per_station["event"] = held_out_event
-    return per_station
+    per_station["threshold_used"] = risk_threshold
+    return per_station, risk_threshold, importances
 
 
 # ----------------------------------------------------------------------
@@ -320,18 +390,29 @@ def summarize(comparison: pd.DataFrame, label: str) -> dict:
     recall = tp / (tp + fn) if (tp + fn) > 0 else np.nan
     accuracy = (tp + tn) / len(comparison)
 
+    # AUC / average precision use the CONTINUOUS risk score rather than the
+    # thresholded guess -- this tells you whether the model has any signal
+    # at all, independent of where the threshold happens to be set.
+    auc, ap = np.nan, np.nan
+    if comparison["actually_failed"].nunique() == 2:
+        from sklearn.metrics import roc_auc_score, average_precision_score
+        auc = roc_auc_score(comparison["actually_failed"], comparison["max_risk_score"])
+        ap = average_precision_score(comparison["actually_failed"], comparison["max_risk_score"])
+
     print(f"  [{label}] n={len(comparison)}  TP={tp} FP={fp} FN={fn} TN={tn}  "
-          f"precision={precision:.2f}  recall={recall:.2f}  accuracy={accuracy:.2f}")
+          f"precision={precision:.2f}  recall={recall:.2f}  accuracy={accuracy:.2f}  "
+          f"AUC={auc:.3f}  AP={ap:.3f}")
 
     return {"label": label, "n": len(comparison), "tp": tp, "fp": fp, "fn": fn, "tn": tn,
-            "precision": precision, "recall": recall, "accuracy": accuracy}
+            "precision": precision, "recall": recall, "accuracy": accuracy,
+            "auc": auc, "average_precision": ap}
 
 
 # ----------------------------------------------------------------------
 # MAIN
 # ----------------------------------------------------------------------
 
-def run(demo: bool = False, risk_threshold: float = 0.5):
+def run(demo: bool = False, risk_threshold: float = None):
     os.makedirs("outputs", exist_ok=True)
     all_case_data = {}
 
@@ -346,12 +427,18 @@ def run(demo: bool = False, risk_threshold: float = 0.5):
     print("\n=== Step 3-6: leave-one-out guess + verify, per storm ===")
     all_comparisons = []
     all_metrics = []
+    all_importances = []
     for case in CASE_STUDIES:
         name = case["name"]
         print(f"\n--- Held-out storm: {name} ---")
-        guesses = guess_at_risk_stations(all_case_data, name, risk_threshold=risk_threshold)
+        guesses, threshold_used, importances = guess_at_risk_stations(
+            all_case_data, name, risk_threshold=risk_threshold)
+        all_importances.append(importances)
+        print(f"  Calibrated threshold for this fold: {threshold_used:.4f}")
         print(f"  Guessed {guesses['guessed_at_risk'].sum()} of {len(guesses)} "
               f"ISD stations as at-risk before landfall.")
+        print(f"  Top 3 features this fold: "
+              f"{', '.join(importances.head(3)['feature'].tolist())}")
 
         if demo:
             ground_truth = make_synthetic_ground_truth(guesses, all_case_data, name)
@@ -379,15 +466,37 @@ def run(demo: bool = False, risk_threshold: float = 0.5):
 
     if all_metrics:
         pd.DataFrame(all_metrics).to_csv("outputs/verify_summary_metrics.csv", index=False)
-        print("\nSaved outputs/verify_all_events.csv, outputs/verify_summary_metrics.csv, "
-              "and outputs/verify_<Event>.csv per storm.")
+
+    if all_importances:
+        imp_all = pd.concat(all_importances, ignore_index=True)
+        imp_all.to_csv("outputs/feature_importances_by_fold.csv", index=False)
+
+        imp_avg = (
+            imp_all.groupby("feature")["importance"]
+            .mean()
+            .sort_values(ascending=False)
+            .reset_index()
+        )
+        imp_avg.to_csv("outputs/feature_importances_averaged.csv", index=False)
+
+        print("\n=== Feature importance, averaged across all 5 leave-one-out folds ===")
+        for _, row in imp_avg.iterrows():
+            bar = "#" * int(row["importance"] * 100)
+            print(f"  {row['feature']:<28} {row['importance']:.3f}  {bar}")
+
+    print("\nOutputs saved to outputs/: verify_<Event>.csv, verify_all_events.csv, "
+          "verify_summary_metrics.csv, feature_importances_by_fold.csv, "
+          "feature_importances_averaged.csv")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--demo", action="store_true",
                          help="Run on synthetic data only, no network access needed.")
-    parser.add_argument("--threshold", type=float, default=0.5,
-                         help="Risk score threshold above which a station is 'guessed at risk'.")
+    parser.add_argument("--threshold", type=float, default=None,
+                         help="Fixed risk score threshold above which a station is 'guessed "
+                              "at risk'. If omitted (default), the threshold is calibrated "
+                              "automatically per fold from the training data's own positive "
+                              "rate -- no leakage from the held-out storm's true outcomes.")
     args = parser.parse_args()
     run(demo=args.demo, risk_threshold=args.threshold)
