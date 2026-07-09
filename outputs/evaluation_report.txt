@@ -1,0 +1,13 @@
+Weather Station Failure Prediction -- Evaluation Report
+=======================================================
+
+Average precision (label vs risk_score): 1.000
+Using risk threshold: 0.0000
+False alarm rate on normal hours: 0.000%
+
+Lead time before failure onset (first correct flag):
+  STN_A_coastal_fails: flagged 12.0h before failure
+  STN_C_inland_fails: flagged 12.0h before failure
+  STN_E_coastal_fails: flagged 12.0h before failure
+
+Average lead time: 12.0h (max possible = 12h)
