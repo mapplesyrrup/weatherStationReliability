@@ -1,0 +1,14 @@
+feature,importance
+pressure_neighbor_div,0.31531726796329324
+wind_speed_rollstd_12h,0.13673474618415932
+pressure_rollstd_12h,0.11697931660534726
+wind_speed_neighbor_div,0.1108624535814865
+wind_speed_stuck_run,0.1082540991931483
+pressure_diff1h,0.10096525493948157
+pressure_rollstd_6h,0.03447541359852806
+wind_speed_rollstd_6h,0.01914442268811494
+wind_speed_rollstd_3h,0.018924488360679913
+pressure_rollstd_3h,0.01624050070018206
+wind_speed_diff1h,0.012337422846679259
+pressure_stuck_run,0.009764613338899582
+hours_since_valid,0.0
