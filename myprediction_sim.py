@@ -1,38 +1,4 @@
 """
-
-
-
-
-
-
-
-
-# pp
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 station_failure_prediction.py
 
 Early-warning model for weather-station failure during extreme precipitation
