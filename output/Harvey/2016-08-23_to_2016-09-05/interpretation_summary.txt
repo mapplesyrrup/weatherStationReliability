@@ -2,5 +2,5 @@ Event: Harvey 2016-08-23 to 2016-09-05
 Stations considered: 401
 
 Pearson correlation: LAT vs Missing% = 0.014; LON vs Missing% = -0.065
-Spearman (distance->missing) rho=-0.109, p=0.029
-Kendall tau=-0.081, p=0.027
+Spearman (distance->missing) rho=-0.080, p=0.108
+Kendall tau=-0.061, p=0.110

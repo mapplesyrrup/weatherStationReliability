@@ -2,5 +2,5 @@ Event: Ian 2022-09-25 to 2022-10-05
 Stations considered: 1469
 
 Pearson correlation: LAT vs Missing% = -0.009; LON vs Missing% = -0.012
-Spearman (distance->missing) rho=-0.016, p=0.539
-Kendall tau=-0.012, p=0.533
+Spearman (distance->missing) rho=0.021, p=0.423
+Kendall tau=0.016, p=0.421

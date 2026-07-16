@@ -187,22 +187,24 @@ CITY_CENTROIDS = [
 
 def download_and_load_naturalearth():
     try:
-        coast_url = ("https://www.naturalearthdata.com/http//www.naturalearthdata.com"
-                     "/download/10m/physical/ne_10m_coastline.zip")
-        urban_url = ("https://www.naturalearthdata.com/http//www.naturalearthdata.com"
-                     "/download/10m/cultural/ne_10m_urban_areas.zip")
+        # naturalearthdata.com itself now blocks plain script requests (406).
+        # naciscdn.org is the stable mirror used by the official rnaturalearth
+        # R package, and is safe to hit with requests.
+        coast_url = "https://naciscdn.org/naturalearth/10m/physical/ne_10m_coastline.zip"
+        urban_url = "https://naciscdn.org/naturalearth/10m/cultural/ne_10m_urban_areas.zip"
+        headers   = {"User-Agent": "Mozilla/5.0 (compatible; hurricane-station-analysis/1.0)"}
         tmpdir = "temp_naturalearth"
         os.makedirs(tmpdir, exist_ok=True)
 
         print("  Downloading Natural Earth coastline...")
-        r = requests.get(coast_url, timeout=60)
+        r = requests.get(coast_url, timeout=60, headers=headers)
         r.raise_for_status()
         zipfile.ZipFile(io.BytesIO(r.content)).extractall(tmpdir)
         coast_shps = [os.path.join(tmpdir, f) for f in os.listdir(tmpdir) if f.endswith('.shp')]
         gdf_coast  = gpd.read_file(coast_shps[0])
 
         print("  Downloading Natural Earth urban areas...")
-        r2 = requests.get(urban_url, timeout=60)
+        r2 = requests.get(urban_url, timeout=60, headers=headers)
         r2.raise_for_status()
         zipfile.ZipFile(io.BytesIO(r2.content)).extractall(tmpdir)
         urban_shps = [os.path.join(tmpdir, f) for f in os.listdir(tmpdir)
@@ -223,7 +225,10 @@ def compute_distances_and_regions(stations_df, output_folder, coastal_km_thresh=
             gdf_coast, gdf_urban = download_and_load_naturalearth()
             if gdf_coast is not None:
                 gdf_coast_proj = gdf_coast.to_crs(epsg=3857)
-                coast_union    = gdf_coast_proj.unary_union
+                try:
+                    coast_union = gdf_coast_proj.union_all()   # newer geopandas/shapely
+                except AttributeError:
+                    coast_union = gdf_coast_proj.unary_union   # older geopandas/shapely
                 pts      = gpd.GeoDataFrame(
                     st,
                     geometry=[Point(xy) for xy in zip(st['LON'], st['LAT'])],
@@ -235,7 +240,11 @@ def compute_distances_and_regions(stations_df, output_folder, coastal_km_thresh=
 
                 if gdf_urban is not None:
                     gdf_urban_proj = gdf_urban.to_crs(epsg=3857)
-                    pts_proj['in_urban'] = pts_proj.within(gdf_urban_proj.unary_union)
+                    try:
+                        urban_union = gdf_urban_proj.union_all()
+                    except AttributeError:
+                        urban_union = gdf_urban_proj.unary_union
+                    pts_proj['in_urban'] = pts_proj.within(urban_union)
                     in_urban = pts_proj['in_urban'].values
                 else:
                     in_urban = np.array([False] * len(st))
@@ -414,10 +423,18 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
 
     output_folder = os.path.join('output', event_name, f"{start_str}_to_{end_str}")
     os.makedirs(output_folder, exist_ok=True)
-    plots_folder  = os.path.join(output_folder, "plots")
-    tables_folder = os.path.join(output_folder, "tables")
-    os.makedirs(plots_folder,  exist_ok=True)
-    os.makedirs(tables_folder, exist_ok=True)
+
+    # Two clearly separated output trees: one for missing-data results, one
+    # for spatial malfunction/suspect-reading results, each with its own
+    # plots/ and tables/ subfolders.
+    missing_folder      = os.path.join(output_folder, "missing_data")
+    malfunction_folder  = os.path.join(output_folder, "malfunction")
+    plots_folder        = os.path.join(missing_folder,     "plots")
+    tables_folder       = os.path.join(missing_folder,     "tables")
+    malfunction_plots   = os.path.join(malfunction_folder, "plots")
+    malfunction_tables  = os.path.join(malfunction_folder, "tables")
+    for folder in (plots_folder, tables_folder, malfunction_plots, malfunction_tables):
+        os.makedirs(folder, exist_ok=True)
 
     start_date = datetime.strptime(start_str, "%Y-%m-%d").date()
     end_date   = datetime.strptime(end_str,   "%Y-%m-%d").date()
@@ -481,7 +498,7 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
         '% Missing':           np.round((1 - valid / np.maximum(total, 1)) * 100, 1),
         'Missing Station IDs': [','.join(ids) if ids else '' for ids in missing_station_ids],
     })
-    summary.to_csv(os.path.join(output_folder, 'missing_summary.csv'), index=False)
+    summary.to_csv(os.path.join(missing_folder, 'missing_summary.csv'), index=False)
 
     records = []
     for sid in unique_sids:
@@ -503,7 +520,7 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
 
     station_missing_df = pd.DataFrame(records)
     station_missing_df.to_csv(
-        os.path.join(output_folder, 'stations_with_missing_data.csv'), index=False)
+        os.path.join(missing_folder, 'stations_with_missing_data.csv'), index=False)
 
     print("  Computing distances and regions...")
     region_df          = compute_distances_and_regions(
@@ -511,18 +528,18 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
     station_missing_df = station_missing_df.merge(
         region_df[['ID', 'Distance_to_Coast_km', 'Region']], on='ID', how='left')
     station_missing_df.to_csv(
-        os.path.join(output_folder, 'stations_with_missing_data_region.csv'), index=False)
+        os.path.join(missing_folder, 'stations_with_missing_data_region.csv'), index=False)
 
     # --- Spatial malfunction / suspect-reading detection ---------------
     print("  Checking readings against neighbouring stations...")
     anomaly_df = compute_spatial_anomalies(
         station_vals, stations[['ID', 'LAT', 'LON']], date_list)
     anomaly_df.to_csv(
-        os.path.join(output_folder, 'spatial_anomalies_detail.csv'), index=False)
+        os.path.join(malfunction_folder, 'spatial_anomalies_detail.csv'), index=False)
 
     malfunction_df = summarize_malfunction(anomaly_df, station_missing_df)
     malfunction_df.to_csv(
-        os.path.join(output_folder, 'stations_malfunction_summary.csv'), index=False)
+        os.path.join(malfunction_folder, 'stations_malfunction_summary.csv'), index=False)
     n_flagged = int(malfunction_df['Likely_Malfunctioning'].sum())
     print(f"  Flagged {n_flagged}/{len(malfunction_df)} stations as Likely_Malfunctioning "
           f"(missing >= {MALFUNCTION_MISSING_PCT}% or suspect >= {MALFUNCTION_SUSPECT_PCT}%).")
@@ -571,7 +588,7 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
                              .agg(['mean', 'std', 'count'])
                              .reset_index())
     suspect_region_stats.to_csv(
-        os.path.join(tables_folder, 'region_suspect_stats.csv'), index=False)
+        os.path.join(malfunction_tables, 'region_suspect_stats.csv'), index=False)
 
     test_results = []
     groups = {
@@ -704,7 +721,7 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
         plt.xlabel('Longitude')
         plt.ylabel('Latitude')
         plt.tight_layout()
-        plt.savefig(os.path.join(plots_folder, 'spatial_scatter_suspect.png'))
+        plt.savefig(os.path.join(malfunction_plots, 'spatial_scatter_suspect.png'))
         plt.close()
 
         # Missing% vs Suspect%, colour-coded by whether a station is flagged
@@ -719,7 +736,7 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
         plt.title(f"{event_name}: Missing vs. Suspect Readings by Station\n"
                   f"(red = flagged Likely_Malfunctioning)")
         plt.tight_layout()
-        plt.savefig(os.path.join(plots_folder, 'missing_vs_suspect_scatter.png'))
+        plt.savefig(os.path.join(malfunction_plots, 'missing_vs_suspect_scatter.png'))
         plt.close()
 
     if not anomaly_df.empty:
@@ -731,7 +748,7 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
         plt.ylabel('Station-days')
         plt.title(f"{event_name}: Distribution of Spatial Residual Z-scores")
         plt.tight_layout()
-        plt.savefig(os.path.join(plots_folder, 'residual_zscore_histogram.png'))
+        plt.savefig(os.path.join(malfunction_plots, 'residual_zscore_histogram.png'))
         plt.close()
 
     with open(os.path.join(output_folder, 'interpretation_summary.txt'), 'w') as fh:
@@ -739,7 +756,8 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
 
     print(f"  Done: {event_name} {start_str} to {end_str}")
     return (station_missing_df, summary, region_stats, tests_df,
-            plots_folder, tables_folder, malfunction_df, anomaly_df)
+            plots_folder, tables_folder, malfunction_df, anomaly_df,
+            malfunction_plots, malfunction_tables, missing_folder, malfunction_folder)
 
 # network resilience metrics
 def compute_network_metrics(before_df, after_df):
@@ -817,18 +835,24 @@ dashboard_entries      = []
 
 for case in case_studies:
     name= case['name']
-    out_folder_event = os.path.join('output', name)
-    os.makedirs(out_folder_event, exist_ok=True)
+    out_folder_event          = os.path.join('output', name)
+    out_missing_event         = os.path.join(out_folder_event, 'missing_data')
+    out_malfunction_event     = os.path.join(out_folder_event, 'malfunction')
+    os.makedirs(out_folder_event,      exist_ok=True)
+    os.makedirs(out_missing_event,     exist_ok=True)
+    os.makedirs(out_malfunction_event, exist_ok=True)
 
     (before_df, before_summary, before_region, before_tests, before_plots,
-     before_tables, before_malfunction, before_anomaly) = run_event_period(
+     before_tables, before_malfunction, before_anomaly, before_malf_plots,
+     before_malf_tables, before_missing_folder, before_malfunction_folder) = run_event_period(
         name, variable,
         case['lat_min'], case['lat_max'], case['lon_min'], case['lon_max'],
         case['prev_start'], case['prev_end']
     )
 
     (after_df, after_summary, after_region, after_tests, after_plots,
-     after_tables, after_malfunction, after_anomaly) = run_event_period(
+     after_tables, after_malfunction, after_anomaly, after_malf_plots,
+     after_malf_tables, after_missing_folder, after_malfunction_folder) = run_event_period(
         name, variable,
         case['lat_min'], case['lat_max'], case['lon_min'], case['lon_max'],
         case['start'], case['end']
@@ -839,14 +863,14 @@ for case in case_studies:
         how='outer', suffixes=('_Before', '_After')
     )
     merged.to_csv(
-        os.path.join(out_folder_event, 'Before_vs_After_station_missing.csv'), index=False)
+        os.path.join(out_missing_event, 'Before_vs_After_station_missing.csv'), index=False)
 
     malfunction_merged = before_malfunction.merge(
         after_malfunction, on=['ID', 'LAT', 'LON', 'NAME'],
         how='outer', suffixes=('_Before', '_After')
     )
     malfunction_merged.to_csv(
-        os.path.join(out_folder_event, 'Before_vs_After_malfunction_summary.csv'), index=False)
+        os.path.join(out_malfunction_event, 'Before_vs_After_malfunction_summary.csv'), index=False)
 
     compare_summary = pd.DataFrame([{
         'Event':               name,
@@ -861,13 +885,14 @@ for case in case_studies:
         'Before_flagged_count': int(before_malfunction['Likely_Malfunctioning'].sum()) if not before_malfunction.empty else 0,
         'After_flagged_count':  int(after_malfunction['Likely_Malfunctioning'].sum())  if not after_malfunction.empty  else 0,
     }])
+    # Combined overview stays at the event root since it spans both categories.
     compare_summary.to_csv(
         os.path.join(out_folder_event, 'before_after_summary.csv'), index=False)
     all_event_summaries.append(compare_summary)
 
     net_metrics = compute_network_metrics(before_df, after_df)
     pd.DataFrame([net_metrics]).to_csv(
-        os.path.join(out_folder_event, 'network_resilience_metrics.csv'), index=False)
+        os.path.join(out_missing_event, 'network_resilience_metrics.csv'), index=False)
 
     brf_path = os.path.join(before_tables, 'region_missing_stats.csv')
     arf_path = os.path.join(after_tables,  'region_missing_stats.csv')
@@ -899,9 +924,11 @@ for case in case_studies:
         'event':                name,
         'folder':               out_folder_event,
         'before_summary':       os.path.join(out_folder_event, 'before_after_summary.csv'),
-        'network_metrics':      os.path.join(out_folder_event, 'network_resilience_metrics.csv'),
-        'malfunction_summary':  os.path.join(out_folder_event, 'Before_vs_After_malfunction_summary.csv'),
-        'plots_folder':         after_plots,
+        'network_metrics':      os.path.join(out_missing_event, 'network_resilience_metrics.csv'),
+        'missing_summary':      os.path.join(out_missing_event, 'Before_vs_After_station_missing.csv'),
+        'malfunction_summary':  os.path.join(out_malfunction_event, 'Before_vs_After_malfunction_summary.csv'),
+        'missing_plots_folder':     after_plots,
+        'malfunction_plots_folder': after_malf_plots,
     })
 
 # CSV
@@ -1002,11 +1029,32 @@ def make_dashboard_html(entries):
     html.append("<hr/>")
 
     for e in entries:
-        html.append(f"<h2>{e['event']}</h2><ul>")
+        html.append(f"<h2>{e['event']}</h2>")
+
+        html.append("<h3>Missing Data</h3><ul>")
         for label, path in [
-            ("Before/After summary (CSV)", os.path.join(e['folder'], 'before_after_summary.csv')),
-            ("Network resilience metrics (CSV)", os.path.join(e['folder'], 'network_resilience_metrics.csv')),
-            ("Station Before vs After (CSV)", os.path.join(e['folder'], 'Before_vs_After_station_missing.csv')),
+            ("Before/After overview (CSV)", e['before_summary']),
+            ("Network resilience metrics (CSV)", e['network_metrics']),
+            ("Station Before vs After — Missing (CSV)", e['missing_summary']),
+        ]:
+            if os.path.exists(path):
+                rel = os.path.relpath(path, start='output')
+                html.append(f"<li><a href='{rel}'>{label}</a></li>")
+        html.append("</ul>")
+
+        mp = e['missing_plots_folder']
+        if os.path.isdir(mp):
+            imgs = sorted(glob.glob(os.path.join(mp, "*.png")))[:10]
+            for img in imgs:
+                rel = os.path.relpath(img, start='output')
+                html.append(
+                    f"<div style='display:inline-block;margin:5px;'>"
+                    f"<img src='{rel}' width=300/><br/>"
+                    f"<small>{os.path.basename(img)}</small></div>"
+                )
+
+        html.append("<h3>Malfunction / Suspect Readings</h3><ul>")
+        for label, path in [
             ("Malfunction summary Before vs After (CSV)", e['malfunction_summary']),
         ]:
             if os.path.exists(path):
@@ -1014,9 +1062,9 @@ def make_dashboard_html(entries):
                 html.append(f"<li><a href='{rel}'>{label}</a></li>")
         html.append("</ul>")
 
-        pf = e['plots_folder']
-        if os.path.isdir(pf):
-            imgs = sorted(glob.glob(os.path.join(pf, "*.png")))[:10]
+        fp = e['malfunction_plots_folder']
+        if os.path.isdir(fp):
+            imgs = sorted(glob.glob(os.path.join(fp, "*.png")))[:10]
             for img in imgs:
                 rel = os.path.relpath(img, start='output')
                 html.append(

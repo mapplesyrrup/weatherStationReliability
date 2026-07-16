@@ -173,22 +173,26 @@ CITY_CENTROIDS = [
 
 def download_and_load_naturalearth():
     try:
-        coast_url = ("https://www.naturalearthdata.com/http//www.naturalearthdata.com"
-                     "/download/10m/physical/ne_10m_coastline.zip")
-        urban_url = ("https://www.naturalearthdata.com/http//www.naturalearthdata.com"
-                     "/download/10m/cultural/ne_10m_urban_areas.zip")
+        coast_url = "https://naciscdn.org/naturalearth/10m/physical/ne_10m_coastline.zip"
+        urban_url = "https://naciscdn.org/naturalearth/10m/cultural/ne_10m_urban_areas.zip"
         tmpdir = "temp_naturalearth"
         os.makedirs(tmpdir, exist_ok=True)
 
+        headers = {
+            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                            "AppleWebKit/537.36 (KHTML, like Gecko) "
+                            "Chrome/124.0.0.0 Safari/537.36")
+        }
+
         print("  Downloading Natural Earth coastline...")
-        r = requests.get(coast_url, timeout=60)
+        r = requests.get(coast_url, headers=headers, timeout=60)
         r.raise_for_status()
         zipfile.ZipFile(io.BytesIO(r.content)).extractall(tmpdir)
         coast_shps = [os.path.join(tmpdir, f) for f in os.listdir(tmpdir) if f.endswith('.shp')]
         gdf_coast  = gpd.read_file(coast_shps[0])
 
         print("  Downloading Natural Earth urban areas...")
-        r2 = requests.get(urban_url, timeout=60)
+        r2 = requests.get(urban_url, headers=headers, timeout=60)
         r2.raise_for_status()
         zipfile.ZipFile(io.BytesIO(r2.content)).extractall(tmpdir)
         urban_shps = [os.path.join(tmpdir, f) for f in os.listdir(tmpdir)
@@ -201,7 +205,7 @@ def download_and_load_naturalearth():
         print(f"  Natural Earth download/load failed: {e}")
         print("  Using haversine fallback for region assignment.")
         return None, None
-
+        
 def compute_distances_and_regions(stations_df, output_folder, coastal_km_thresh=50):
     st = stations_df.copy().reset_index(drop=True)
     if USE_GEOPANDAS:
