@@ -1,6 +1,7 @@
 Event: Sandy 2011-10-25 to 2011-11-05
 Stations considered: 600
+Stations flagged Likely_Malfunctioning (spatially suspect readings): 69
 
-Pearson correlation: LAT vs Missing% = -0.099; LON vs Missing% = -0.048
-Spearman (distance->missing) rho=-0.120, p=0.003
-Kendall tau=-0.096, p=0.003
+Pearson correlation: LAT vs Suspect% = 0.256; LON vs Suspect% = 0.229
+Spearman (distance->suspect) rho=0.213, p=0.000
+Kendall tau=0.173, p=0.000

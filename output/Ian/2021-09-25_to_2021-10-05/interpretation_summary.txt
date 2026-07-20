@@ -1,6 +1,7 @@
 Event: Ian 2021-09-25 to 2021-10-05
 Stations considered: 1496
+Stations flagged Likely_Malfunctioning (spatially suspect readings): 635
 
-Pearson correlation: LAT vs Missing% = 0.020; LON vs Missing% = 0.006
-Spearman (distance->missing) rho=0.030, p=0.249
-Kendall tau=0.023, p=0.255
+Pearson correlation: LAT vs Suspect% = -0.194; LON vs Suspect% = 0.147
+Spearman (distance->suspect) rho=-0.038, p=0.141
+Kendall tau=-0.027, p=0.150

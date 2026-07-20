@@ -1,2 +1,2 @@
-Event,Before_mean_missing,After_mean_missing,Delta_mean_missing
-Sandy,34.3748,33.212668810289394,-1.1621311897106068
+Event,Before_mean_suspect,After_mean_suspect,Delta_mean_suspect,Before_flagged_count,After_flagged_count
+Sandy,7.081783333333333,12.70491961414791,5.623136280814577,69,149

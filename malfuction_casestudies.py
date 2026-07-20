@@ -63,25 +63,16 @@ case_studies = [
      "prev_start": "2017-10-07", "prev_end": "2017-10-12"},
 ]
 
-# SPATIAL "MALFUNCTIONING STATION" DETECTION SETTINGS
-#
-# A station is considered a candidate "malfunction" not only when it is
-# missing data, but also when the values it DOES report are wildly out of
-# step with what nearby stations were reporting on the same day. We estimate
-# each station's expected value from an inverse-distance-weighted mean of
-# its neighbours, then flag days where the actual reading is a robust
-# statistical outlier relative to that neighbourhood estimate.
 SPATIAL_RADIUS_KM        = 100    # neighbours must be within this distance to be used
 MIN_NEIGHBORS            = 3      # need at least this many neighbours reporting that day
 MAD_Z_THRESHOLD          = 3.5    # robust z-score (MAD-based) beyond which a reading is "Suspect"
-MALFUNCTION_MISSING_PCT  = 30.0   # missing% at/above this contributes to "Likely_Malfunctioning"
-MALFUNCTION_SUSPECT_PCT  = 20.0   # suspect% at/above this contributes to "Likely_Malfunctioning"
+MALFUNCTION_SUSPECT_PCT  = 20.0   # suspect% at/above this flags a station "Likely_Malfunctioning"
 
 
-# USER VARIABLE
+
 variable = input("Enter variable (TMAX, TMIN, PRCP, TAVG): ").strip().upper()
 
-# FILES
+# files
 station_file   = 'ghcnd-stations.txt'
 inventory_file = 'ghcnd-inventory.txt'
 dly_folder     = 'dly_files'
@@ -94,8 +85,7 @@ for req in [station_file, inventory_file]:
               f"Download from https://www.ncei.noaa.gov/pub/data/ghcn/daily/")
         raise SystemExit
 
-# Load inventory + stations
-print("Loading station inventory...")
+
 inventory = pd.read_csv(
     inventory_file, sep=r'\s+', header=None,
     names=["ID", "LAT", "LON", "ELEMENT", "FIRSTYEAR", "LASTYEAR"],
@@ -187,23 +177,19 @@ CITY_CENTROIDS = [
 
 def download_and_load_naturalearth():
     try:
-        # naturalearthdata.com itself now blocks plain script requests (406).
-        # naciscdn.org is the stable mirror used by the official rnaturalearth
-        # R package, and is safe to hit with requests.
         coast_url = "https://naciscdn.org/naturalearth/10m/physical/ne_10m_coastline.zip"
         urban_url = "https://naciscdn.org/naturalearth/10m/cultural/ne_10m_urban_areas.zip"
         headers   = {"User-Agent": "Mozilla/5.0 (compatible; hurricane-station-analysis/1.0)"}
         tmpdir = "temp_naturalearth"
         os.makedirs(tmpdir, exist_ok=True)
 
-        print("  Downloading Natural Earth coastline...")
+
         r = requests.get(coast_url, timeout=60, headers=headers)
         r.raise_for_status()
         zipfile.ZipFile(io.BytesIO(r.content)).extractall(tmpdir)
         coast_shps = [os.path.join(tmpdir, f) for f in os.listdir(tmpdir) if f.endswith('.shp')]
         gdf_coast  = gpd.read_file(coast_shps[0])
 
-        print("  Downloading Natural Earth urban areas...")
         r2 = requests.get(urban_url, timeout=60, headers=headers)
         r2.raise_for_status()
         zipfile.ZipFile(io.BytesIO(r2.content)).extractall(tmpdir)
@@ -295,9 +281,8 @@ def compute_distances_and_regions(stations_df, output_folder, coastal_km_thresh=
 
 # SPATIAL MALFUNCTION / SUSPECT-DATA DETECTION
 #
-# Missing data is easy to catch (the reading just isn't there). A station
-# can also be "malfunctioning" while it keeps reporting numbers — e.g. a
-# stuck sensor, a decimal/unit error, a miscalibrated gauge. Those look
+# A station can be "malfunctioning" while it keeps reporting numbers — e.g.
+# a stuck sensor, a decimal/unit error, a miscalibrated gauge. Those look
 # fine at a glance (a value exists) but disagree badly with everything
 # nearby was reporting that same day. compute_spatial_anomalies() estimates
 # what each station "should" have read from its neighbours and flags days
@@ -376,15 +361,13 @@ def compute_spatial_anomalies(station_vals, stations_df, date_list,
     return pd.DataFrame(rows)
 
 
-def summarize_malfunction(anomaly_df, station_missing_df,
-                           missing_thresh=MALFUNCTION_MISSING_PCT,
+def summarize_malfunction(stations_base_df, anomaly_df,
                            suspect_thresh=MALFUNCTION_SUSPECT_PCT):
     """
-    Combines the existing missing-data metrics with the spatial-outlier
-    ("Suspect") metrics into a single per-station malfunction picture.
-    A station can be flagged Likely_Malfunctioning either because it's
-    frequently missing, or because the values it does report keep
-    disagreeing with its neighbours (or both).
+    Builds the per-station malfunction picture purely from spatial-outlier
+    ("Suspect") behaviour: how many days a station could be checked against
+    its neighbours, and how many of those days its reading disagreed badly
+    with the neighbourhood estimate.
     """
     if anomaly_df.empty:
         suspect_summary = pd.DataFrame(columns=['ID', 'Days_Checked', 'Suspect_Days'])
@@ -394,7 +377,7 @@ def summarize_malfunction(anomaly_df, station_missing_df,
                                  Suspect_Days=('Suspect', 'sum'))
                             .reset_index())
 
-    merged = station_missing_df.merge(suspect_summary, on='ID', how='left')
+    merged = stations_base_df.merge(suspect_summary, on='ID', how='left')
     merged['Days_Checked'] = merged['Days_Checked'].fillna(0).astype(int)
     merged['Suspect_Days'] = merged['Suspect_Days'].fillna(0).astype(int)
     merged['Suspect_%']    = np.where(
@@ -404,15 +387,10 @@ def summarize_malfunction(anomaly_df, station_missing_df,
     )
     merged['Suspect_%'] = merged['Suspect_%'].fillna(0.0)
 
-    merged['Likely_Malfunctioning'] = (
-        (merged['Missing %'] >= missing_thresh) |
-        (merged['Suspect_%'] >= suspect_thresh)
-    )
-    # Simple blended score (0-100): treat "missing" and "gives suspect
-    # readings" as two equally-weighted symptoms of the same underlying
-    # problem — an unreliable station.
-    merged['Malfunction_Score'] = np.round(
-        (merged['Missing %'].fillna(0) + merged['Suspect_%'].fillna(0)) / 2, 2)
+    merged['Likely_Malfunctioning'] = merged['Suspect_%'] >= suspect_thresh
+    # With only one symptom being tracked (spatial disagreement), the score
+    # is just the Suspect_% itself.
+    merged['Malfunction_Score'] = merged['Suspect_%']
 
     return merged
 
@@ -424,16 +402,10 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
     output_folder = os.path.join('output', event_name, f"{start_str}_to_{end_str}")
     os.makedirs(output_folder, exist_ok=True)
 
-    # Two clearly separated output trees: one for missing-data results, one
-    # for spatial malfunction/suspect-reading results, each with its own
-    # plots/ and tables/ subfolders.
-    missing_folder      = os.path.join(output_folder, "missing_data")
-    malfunction_folder  = os.path.join(output_folder, "malfunction")
-    plots_folder        = os.path.join(missing_folder,     "plots")
-    tables_folder       = os.path.join(missing_folder,     "tables")
+    malfunction_folder = os.path.join(output_folder, "malfunction")
     malfunction_plots   = os.path.join(malfunction_folder, "plots")
     malfunction_tables  = os.path.join(malfunction_folder, "tables")
-    for folder in (plots_folder, tables_folder, malfunction_plots, malfunction_tables):
+    for folder in (malfunction_plots, malfunction_tables):
         os.makedirs(folder, exist_ok=True)
 
     start_date = datetime.strptime(start_str, "%Y-%m-%d").date()
@@ -467,68 +439,17 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
 
     date_list = [start_date + timedelta(days=i)
                            for i in range((end_date - start_date).days + 1)]
-    total= np.zeros(len(date_list))
-    valid= np.zeros(len(date_list))
-    missing_station_ids = [[] for _ in range(len(date_list))]
 
-    # Parse every station's .dly ONCE and keep the values around — they're
-    # reused for the missing-data summary, the per-station records, AND the
-    # spatial malfunction check below, instead of re-parsing the files.
-    print("  Parsing station files (missing-data + value matrix)...")
+    print("  Parsing station files...")
     station_vals = {}
     for sid in unique_sids:
         path = os.path.join(dly_folder, f"{sid}.dly")
         if os.path.exists(path):
             station_vals[sid] = parse_dly(path, variable, start_date, end_date)
 
-    for sid in unique_sids:
-        vals = station_vals.get(sid, {})
-        for i, d in enumerate(date_list):
-            total[i] += 1
-            if d in vals:
-                valid[i] += 1
-            else:
-                missing_station_ids[i].append(sid)
-
-    summary = pd.DataFrame({
-        'Date':                [d.strftime("%Y-%m-%d") for d in date_list],
-        'Stations Reporting':  valid.astype(int),
-        'Stations Missing':    (total - valid).astype(int),
-        'Total Stations':      total.astype(int),
-        '% Missing':           np.round((1 - valid / np.maximum(total, 1)) * 100, 1),
-        'Missing Station IDs': [','.join(ids) if ids else '' for ids in missing_station_ids],
-    })
-    summary.to_csv(os.path.join(missing_folder, 'missing_summary.csv'), index=False)
-
-    records = []
-    for sid in unique_sids:
-        if sid in station_vals:
-            vals         = station_vals[sid]
-            total_days   = len(date_list)
-            missing_days = sum(1 for d in date_list if d not in vals)
-            info         = stations[stations['ID'] == sid].iloc[0]
-            missing_pct  = round((missing_days / total_days) * 100, 2)
-            records.append({
-                'ID':           sid,
-                'LAT':          info['LAT'],
-                'LON':          info['LON'],
-                'NAME':         info['NAME'],
-                'Total Days':   total_days,
-                'Missing Days': missing_days,
-                'Missing %':    missing_pct,
-            })
-
-    station_missing_df = pd.DataFrame(records)
-    station_missing_df.to_csv(
-        os.path.join(missing_folder, 'stations_with_missing_data.csv'), index=False)
-
     print("  Computing distances and regions...")
-    region_df          = compute_distances_and_regions(
+    region_df = compute_distances_and_regions(
         stations[['ID', 'LAT', 'LON', 'NAME']], output_folder, coastal_km_thresh=50)
-    station_missing_df = station_missing_df.merge(
-        region_df[['ID', 'Distance_to_Coast_km', 'Region']], on='ID', how='left')
-    station_missing_df.to_csv(
-        os.path.join(missing_folder, 'stations_with_missing_data_region.csv'), index=False)
 
     # --- Spatial malfunction / suspect-reading detection ---------------
     print("  Checking readings against neighbouring stations...")
@@ -537,63 +458,50 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
     anomaly_df.to_csv(
         os.path.join(malfunction_folder, 'spatial_anomalies_detail.csv'), index=False)
 
-    malfunction_df = summarize_malfunction(anomaly_df, station_missing_df)
+    malfunction_df = summarize_malfunction(
+        region_df[['ID', 'LAT', 'LON', 'NAME', 'Distance_to_Coast_km', 'Region']], anomaly_df)
     malfunction_df.to_csv(
         os.path.join(malfunction_folder, 'stations_malfunction_summary.csv'), index=False)
     n_flagged = int(malfunction_df['Likely_Malfunctioning'].sum())
     print(f"  Flagged {n_flagged}/{len(malfunction_df)} stations as Likely_Malfunctioning "
-          f"(missing >= {MALFUNCTION_MISSING_PCT}% or suspect >= {MALFUNCTION_SUSPECT_PCT}%).")
+          f"(suspect >= {MALFUNCTION_SUSPECT_PCT}% of checked days).")
 
     # stats
     out_lines = [
         f"Event: {event_name} {start_str} to {end_str}",
-        f"Stations considered: {len(station_missing_df)}",
-        f"Stations flagged Likely_Malfunctioning (missing or spatially suspect): {n_flagged}",
+        f"Stations considered: {len(malfunction_df)}",
+        f"Stations flagged Likely_Malfunctioning (spatially suspect readings): {n_flagged}",
         "",
     ]
 
-    if len(station_missing_df) >= 3:
-        corr_lat = station_missing_df['LAT'].corr(station_missing_df['Missing %'])
-        corr_lon = station_missing_df['LON'].corr(station_missing_df['Missing %'])
+    if len(malfunction_df) >= 3:
+        corr_lat = malfunction_df['LAT'].corr(malfunction_df['Suspect_%'])
+        corr_lon = malfunction_df['LON'].corr(malfunction_df['Suspect_%'])
         out_lines.append(
-            f"Pearson correlation: LAT vs Missing% = {corr_lat:.3f}; "
-            f"LON vs Missing% = {corr_lon:.3f}"
+            f"Pearson correlation: LAT vs Suspect% = {corr_lat:.3f}; "
+            f"LON vs Suspect% = {corr_lon:.3f}"
         )
         if USE_SCIPY:
             rho, p_rho = spearmanr(
-                station_missing_df['Distance_to_Coast_km'], station_missing_df['Missing %'])
+                malfunction_df['Distance_to_Coast_km'], malfunction_df['Suspect_%'])
             tau, p_tau = kendalltau(
-                station_missing_df['Distance_to_Coast_km'], station_missing_df['Missing %'])
-            out_lines.append(f"Spearman (distance->missing) rho={rho:.3f}, p={p_rho:.3f}")
+                malfunction_df['Distance_to_Coast_km'], malfunction_df['Suspect_%'])
+            out_lines.append(f"Spearman (distance->suspect) rho={rho:.3f}, p={p_rho:.3f}")
             out_lines.append(f"Kendall tau={tau:.3f}, p={p_tau:.3f}")
     else:
         out_lines.append("Not enough stations for correlations.")
 
-    if USE_SCIPY and len(malfunction_df) >= 3 and malfunction_df['Days_Checked'].sum() > 0:
-        try:
-            rho2, p_rho2 = spearmanr(malfunction_df['Missing %'], malfunction_df['Suspect_%'])
-            out_lines.append(
-                f"Spearman (Missing% vs Suspect%) rho={rho2:.3f}, p={p_rho2:.3f}")
-        except Exception:
-            pass
-
-    region_stats = (station_missing_df
-                    .groupby('Region')['Missing %']
+    region_stats = (malfunction_df
+                    .groupby('Region')['Suspect_%']
                     .agg(['mean', 'std', 'count'])
                     .reset_index())
-    region_stats.to_csv(os.path.join(tables_folder, 'region_missing_stats.csv'), index=False)
-
-    suspect_region_stats = (malfunction_df
-                             .groupby('Region')['Suspect_%']
-                             .agg(['mean', 'std', 'count'])
-                             .reset_index())
-    suspect_region_stats.to_csv(
+    region_stats.to_csv(
         os.path.join(malfunction_tables, 'region_suspect_stats.csv'), index=False)
 
     test_results = []
     groups = {
-        r: station_missing_df[station_missing_df['Region'] == r]['Missing %'].dropna().values
-        for r in station_missing_df['Region'].unique()
+        r: malfunction_df[malfunction_df['Region'] == r]['Suspect_%'].dropna().values
+        for r in malfunction_df['Region'].unique()
     }
 
     if USE_SCIPY and len(groups) >= 2 and all(len(v) >= 2 for v in groups.values()):
@@ -625,98 +533,53 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
             test_results.append({'test': 'MannWhitney_Coastal_vs_Inland', 'stat': m_s2, 'p': m_p2})
 
     try:
-        median_missing = station_missing_df['Missing %'].median()
-        station_missing_df['MissingCat'] = np.where(
-            station_missing_df['Missing %'] > median_missing, 'High', 'Low')
-        contingency = pd.crosstab(station_missing_df['Region'], station_missing_df['MissingCat'])
+        median_suspect = malfunction_df['Suspect_%'].median()
+        malfunction_df['SuspectCat'] = np.where(
+            malfunction_df['Suspect_%'] > median_suspect, 'High', 'Low')
+        contingency = pd.crosstab(malfunction_df['Region'], malfunction_df['SuspectCat'])
         if USE_SCIPY and contingency.shape[0] > 1 and contingency.shape[1] > 1:
             chi2, p_chi, dof, exp = chi2_contingency(contingency)
             test_results.append(
-                {'test': 'ChiSquare_region_vs_missingcat', 'stat': chi2, 'p': p_chi})
+                {'test': 'ChiSquare_region_vs_suspectcat', 'stat': chi2, 'p': p_chi})
     except Exception:
         pass
 
     tests_df = pd.DataFrame(test_results)
-    tests_df.to_csv(os.path.join(tables_folder, 'statistical_tests_results.csv'), index=False)
+    tests_df.to_csv(os.path.join(malfunction_tables, 'statistical_tests_results.csv'), index=False)
 
     print("  Generating plots...")
-    if not station_missing_df.empty:
+    if not malfunction_df.empty:
         if USE_SEABORN:
             sns.set(style="whitegrid")
             plt.figure(figsize=(8, 6))
-            sns.boxplot(data=station_missing_df, x="Region", y="Missing %")
-            plt.title(f"{event_name}: Missing % by Region")
+            sns.boxplot(data=malfunction_df, x="Region", y="Suspect_%")
+            plt.title(f"{event_name}: Suspect % by Region")
             plt.tight_layout()
-            plt.savefig(os.path.join(plots_folder, 'boxplot_missing_by_region.png'))
+            plt.savefig(os.path.join(malfunction_plots, 'boxplot_suspect_by_region.png'))
             plt.close()
 
             plt.figure(figsize=(8, 6))
-            sns.violinplot(data=station_missing_df, x="Region", y="Missing %")
-            plt.title(f"{event_name}: Missing % distribution by Region")
+            sns.violinplot(data=malfunction_df, x="Region", y="Suspect_%")
+            plt.title(f"{event_name}: Suspect % distribution by Region")
             plt.tight_layout()
-            plt.savefig(os.path.join(plots_folder, 'violin_missing_by_region.png'))
+            plt.savefig(os.path.join(malfunction_plots, 'violin_suspect_by_region.png'))
             plt.close()
         else:
             plt.figure(figsize=(8, 6))
-            station_missing_df.boxplot(column='Missing %', by='Region')
-            plt.title(f"{event_name}: Missing % by Region")
+            malfunction_df.boxplot(column='Suspect_%', by='Region')
+            plt.title(f"{event_name}: Suspect % by Region")
             plt.suptitle("")
             plt.tight_layout()
-            plt.savefig(os.path.join(plots_folder, 'boxplot_missing_by_region.png'))
+            plt.savefig(os.path.join(malfunction_plots, 'boxplot_suspect_by_region.png'))
             plt.close()
 
         plt.figure(figsize=(8, 6))
         sc = plt.scatter(
-            station_missing_df['LON'], station_missing_df['LAT'],
-            c=station_missing_df['Missing %'], s=40, cmap='Reds',
-            edgecolor='k', linewidth=0.2
-        )
-        plt.colorbar(sc, label='% Missing')
-        plt.title(f"{event_name}: Spatial Missing %")
-        plt.xlabel('Longitude')
-        plt.ylabel('Latitude')
-        plt.tight_layout()
-        plt.savefig(os.path.join(plots_folder, 'spatial_scatter_missing.png'))
-        plt.close()
-
-        try:
-            if USE_SCIPY and len(station_missing_df) >= 4:
-                xi = np.linspace(station_missing_df['LON'].min(),
-                                 station_missing_df['LON'].max(), 200)
-                yi = np.linspace(station_missing_df['LAT'].min(),
-                                 station_missing_df['LAT'].max(), 200)
-                Xi, Yi = np.meshgrid(xi, yi)
-                Zi = griddata(
-                    (station_missing_df['LON'], station_missing_df['LAT']),
-                    station_missing_df['Missing %'],
-                    (Xi, Yi), method='linear'
-                )
-                plt.figure(figsize=(8, 6))
-                plt.contourf(Xi, Yi, Zi, levels=14, cmap='Reds', alpha=0.8)
-                plt.scatter(
-                    station_missing_df['LON'], station_missing_df['LAT'],
-                    c=station_missing_df['Missing %'], s=20, cmap='Reds',
-                    edgecolor='k', linewidth=0.2
-                )
-                plt.colorbar(label='% Missing')
-                plt.title(f"{event_name}: Interpolated Heatmap of % Missing")
-                plt.xlabel('Longitude')
-                plt.ylabel('Latitude')
-                plt.tight_layout()
-                plt.savefig(os.path.join(plots_folder, 'heatmap_interpolated_missing.png'))
-                plt.close()
-        except Exception:
-            pass
-
-    if not malfunction_df.empty:
-        # Spatial map of "Suspect %" — readings that disagree with neighbours
-        plt.figure(figsize=(8, 6))
-        sc2 = plt.scatter(
             malfunction_df['LON'], malfunction_df['LAT'],
             c=malfunction_df['Suspect_%'], s=40, cmap='Purples',
             edgecolor='k', linewidth=0.2
         )
-        plt.colorbar(sc2, label='% Days Flagged Suspect (vs neighbours)')
+        plt.colorbar(sc, label='% Days Flagged Suspect (vs neighbours)')
         plt.title(f"{event_name}: Spatial Outlier / Suspect Reading %")
         plt.xlabel('Longitude')
         plt.ylabel('Latitude')
@@ -724,20 +587,34 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
         plt.savefig(os.path.join(malfunction_plots, 'spatial_scatter_suspect.png'))
         plt.close()
 
-        # Missing% vs Suspect%, colour-coded by whether a station is flagged
-        plt.figure(figsize=(8, 6))
-        colors = malfunction_df['Likely_Malfunctioning'].map({True: 'crimson', False: 'steelblue'})
-        plt.scatter(malfunction_df['Missing %'], malfunction_df['Suspect_%'],
-                    c=colors, edgecolor='k', linewidth=0.3, s=45)
-        plt.axvline(MALFUNCTION_MISSING_PCT, color='gray', linestyle='--', linewidth=1)
-        plt.axhline(MALFUNCTION_SUSPECT_PCT, color='gray', linestyle='--', linewidth=1)
-        plt.xlabel('Missing %')
-        plt.ylabel('Suspect % (spatial outlier days)')
-        plt.title(f"{event_name}: Missing vs. Suspect Readings by Station\n"
-                  f"(red = flagged Likely_Malfunctioning)")
-        plt.tight_layout()
-        plt.savefig(os.path.join(malfunction_plots, 'missing_vs_suspect_scatter.png'))
-        plt.close()
+        try:
+            if USE_SCIPY and len(malfunction_df) >= 4:
+                xi = np.linspace(malfunction_df['LON'].min(),
+                                 malfunction_df['LON'].max(), 200)
+                yi = np.linspace(malfunction_df['LAT'].min(),
+                                 malfunction_df['LAT'].max(), 200)
+                Xi, Yi = np.meshgrid(xi, yi)
+                Zi = griddata(
+                    (malfunction_df['LON'], malfunction_df['LAT']),
+                    malfunction_df['Suspect_%'],
+                    (Xi, Yi), method='linear'
+                )
+                plt.figure(figsize=(8, 6))
+                plt.contourf(Xi, Yi, Zi, levels=14, cmap='Purples', alpha=0.8)
+                plt.scatter(
+                    malfunction_df['LON'], malfunction_df['LAT'],
+                    c=malfunction_df['Suspect_%'], s=20, cmap='Purples',
+                    edgecolor='k', linewidth=0.2
+                )
+                plt.colorbar(label='% Days Flagged Suspect')
+                plt.title(f"{event_name}: Interpolated Heatmap of Suspect %")
+                plt.xlabel('Longitude')
+                plt.ylabel('Latitude')
+                plt.tight_layout()
+                plt.savefig(os.path.join(malfunction_plots, 'heatmap_interpolated_suspect.png'))
+                plt.close()
+        except Exception:
+            pass
 
     if not anomaly_df.empty:
         plt.figure(figsize=(8, 6))
@@ -755,19 +632,16 @@ def run_event_period(event_name, variable, lat_min, lat_max, lon_min, lon_max, s
         fh.write("\n".join(out_lines))
 
     print(f"  Done: {event_name} {start_str} to {end_str}")
-    return (station_missing_df, summary, region_stats, tests_df,
-            plots_folder, tables_folder, malfunction_df, anomaly_df,
-            malfunction_plots, malfunction_tables, missing_folder, malfunction_folder)
+    return (malfunction_df, region_stats, tests_df,
+            malfunction_plots, malfunction_tables, malfunction_folder, anomaly_df)
 
 # network resilience metrics
 def compute_network_metrics(before_df, after_df):
-    thr = 50.0
-
     def failure_mask(df):
         if df is None or df.empty:
             return pd.DataFrame(columns=['ID', 'LAT', 'LON', 'Failed'])
         m = df.copy()
-        m['Failed'] = m['Missing %'] >= thr
+        m['Failed'] = m['Likely_Malfunctioning']
         return m[['ID', 'LAT', 'LON', 'Failed']]
 
     b = failure_mask(before_df)
@@ -836,34 +710,23 @@ dashboard_entries      = []
 for case in case_studies:
     name= case['name']
     out_folder_event          = os.path.join('output', name)
-    out_missing_event         = os.path.join(out_folder_event, 'missing_data')
     out_malfunction_event     = os.path.join(out_folder_event, 'malfunction')
     os.makedirs(out_folder_event,      exist_ok=True)
-    os.makedirs(out_missing_event,     exist_ok=True)
     os.makedirs(out_malfunction_event, exist_ok=True)
 
-    (before_df, before_summary, before_region, before_tests, before_plots,
-     before_tables, before_malfunction, before_anomaly, before_malf_plots,
-     before_malf_tables, before_missing_folder, before_malfunction_folder) = run_event_period(
+    (before_malfunction, before_region, before_tests, before_malf_plots,
+     before_malf_tables, before_malfunction_folder, before_anomaly) = run_event_period(
         name, variable,
         case['lat_min'], case['lat_max'], case['lon_min'], case['lon_max'],
         case['prev_start'], case['prev_end']
     )
 
-    (after_df, after_summary, after_region, after_tests, after_plots,
-     after_tables, after_malfunction, after_anomaly, after_malf_plots,
-     after_malf_tables, after_missing_folder, after_malfunction_folder) = run_event_period(
+    (after_malfunction, after_region, after_tests, after_malf_plots,
+     after_malf_tables, after_malfunction_folder, after_anomaly) = run_event_period(
         name, variable,
         case['lat_min'], case['lat_max'], case['lon_min'], case['lon_max'],
         case['start'], case['end']
     )
-
-    merged = before_df.merge(
-        after_df, on=['ID', 'LAT', 'LON', 'NAME'],
-        how='outer', suffixes=('_Before', '_After')
-    )
-    merged.to_csv(
-        os.path.join(out_missing_event, 'Before_vs_After_station_missing.csv'), index=False)
 
     malfunction_merged = before_malfunction.merge(
         after_malfunction, on=['ID', 'LAT', 'LON', 'NAME'],
@@ -874,10 +737,6 @@ for case in case_studies:
 
     compare_summary = pd.DataFrame([{
         'Event':               name,
-        'Before_mean_missing': before_df['Missing %'].mean() if not before_df.empty else np.nan,
-        'After_mean_missing':  after_df['Missing %'].mean()  if not after_df.empty  else np.nan,
-        'Delta_mean_missing':  (after_df['Missing %'].mean() - before_df['Missing %'].mean())
-                               if (not after_df.empty and not before_df.empty) else np.nan,
         'Before_mean_suspect': before_malfunction['Suspect_%'].mean() if not before_malfunction.empty else np.nan,
         'After_mean_suspect':  after_malfunction['Suspect_%'].mean()  if not after_malfunction.empty  else np.nan,
         'Delta_mean_suspect':  (after_malfunction['Suspect_%'].mean() - before_malfunction['Suspect_%'].mean())
@@ -885,17 +744,16 @@ for case in case_studies:
         'Before_flagged_count': int(before_malfunction['Likely_Malfunctioning'].sum()) if not before_malfunction.empty else 0,
         'After_flagged_count':  int(after_malfunction['Likely_Malfunctioning'].sum())  if not after_malfunction.empty  else 0,
     }])
-    # Combined overview stays at the event root since it spans both categories.
     compare_summary.to_csv(
         os.path.join(out_folder_event, 'before_after_summary.csv'), index=False)
     all_event_summaries.append(compare_summary)
 
-    net_metrics = compute_network_metrics(before_df, after_df)
+    net_metrics = compute_network_metrics(before_malfunction, after_malfunction)
     pd.DataFrame([net_metrics]).to_csv(
-        os.path.join(out_missing_event, 'network_resilience_metrics.csv'), index=False)
+        os.path.join(out_malfunction_event, 'network_resilience_metrics.csv'), index=False)
 
-    brf_path = os.path.join(before_tables, 'region_missing_stats.csv')
-    arf_path = os.path.join(after_tables,  'region_missing_stats.csv')
+    brf_path = os.path.join(before_malf_tables, 'region_suspect_stats.csv')
+    arf_path = os.path.join(after_malf_tables,  'region_suspect_stats.csv')
 
     if os.path.exists(brf_path):
         brf = pd.read_csv(brf_path)
@@ -924,10 +782,8 @@ for case in case_studies:
         'event':                name,
         'folder':               out_folder_event,
         'before_summary':       os.path.join(out_folder_event, 'before_after_summary.csv'),
-        'network_metrics':      os.path.join(out_missing_event, 'network_resilience_metrics.csv'),
-        'missing_summary':      os.path.join(out_missing_event, 'Before_vs_After_station_missing.csv'),
+        'network_metrics':      os.path.join(out_malfunction_event, 'network_resilience_metrics.csv'),
         'malfunction_summary':  os.path.join(out_malfunction_event, 'Before_vs_After_malfunction_summary.csv'),
-        'missing_plots_folder':     after_plots,
         'malfunction_plots_folder': after_malf_plots,
     })
 
@@ -951,16 +807,6 @@ try:
     event_summ = pd.read_csv("output/CaseStudy_Before_After_Comparison_All.csv")
     x = np.arange(len(event_summ))
     w = 0.35
-    plt.figure(figsize=(10, 6))
-    plt.bar(x - w / 2, event_summ['Before_mean_missing'], width=w, label='Before')
-    plt.bar(x + w / 2, event_summ['After_mean_missing'],  width=w, label='After')
-    plt.xticks(x, event_summ['Event'])
-    plt.ylabel("Mean % Missing Data")
-    plt.title("Station Data Loss Before vs After Storm Events")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig("output/Before_vs_After_Main_Comparison.png")
-    plt.close()
 
     plt.figure(figsize=(10, 6))
     plt.bar(x - w / 2, event_summ['Before_mean_suspect'], width=w, label='Before')
@@ -994,8 +840,8 @@ try:
         sub = region_subset[
             (region_subset["Event"] == event) & (region_subset["Period"] == "After")]
         plt.scatter(sub["Region"], sub["mean"], label=event, s=80)
-    plt.ylabel("Mean % Missing Data (After Event)")
-    plt.title("Coastal vs Rural Data Loss Across Case Studies (After Storms)")
+    plt.ylabel("Mean % Days Flagged Suspect (After Event)")
+    plt.title("Coastal vs Rural Suspect Readings Across Case Studies (After Storms)")
     plt.legend()
     plt.tight_layout()
     plt.savefig("output/Coastal_vs_Rural_Across_Case_Studies.png")
@@ -1014,9 +860,6 @@ def make_dashboard_html(entries):
         f"<p>Variable: {variable}</p>",
         "<h2>Summary Plots</h2>",
     ]
-    if os.path.exists("output/Before_vs_After_Main_Comparison.png"):
-        html.append("<h3>Before vs After — Missing Data, All Events</h3>")
-        html.append("<img src='Before_vs_After_Main_Comparison.png' width=800/>")
     if os.path.exists("output/Before_vs_After_Suspect_Comparison.png"):
         html.append("<h3>Before vs After — Spatially Suspect Readings, All Events</h3>")
         html.append("<img src='Before_vs_After_Suspect_Comparison.png' width=800/>")
@@ -1031,30 +874,10 @@ def make_dashboard_html(entries):
     for e in entries:
         html.append(f"<h2>{e['event']}</h2>")
 
-        html.append("<h3>Missing Data</h3><ul>")
+        html.append("<h3>Malfunction / Suspect Readings</h3><ul>")
         for label, path in [
             ("Before/After overview (CSV)", e['before_summary']),
             ("Network resilience metrics (CSV)", e['network_metrics']),
-            ("Station Before vs After — Missing (CSV)", e['missing_summary']),
-        ]:
-            if os.path.exists(path):
-                rel = os.path.relpath(path, start='output')
-                html.append(f"<li><a href='{rel}'>{label}</a></li>")
-        html.append("</ul>")
-
-        mp = e['missing_plots_folder']
-        if os.path.isdir(mp):
-            imgs = sorted(glob.glob(os.path.join(mp, "*.png")))[:10]
-            for img in imgs:
-                rel = os.path.relpath(img, start='output')
-                html.append(
-                    f"<div style='display:inline-block;margin:5px;'>"
-                    f"<img src='{rel}' width=300/><br/>"
-                    f"<small>{os.path.basename(img)}</small></div>"
-                )
-
-        html.append("<h3>Malfunction / Suspect Readings</h3><ul>")
-        for label, path in [
             ("Malfunction summary Before vs After (CSV)", e['malfunction_summary']),
         ]:
             if os.path.exists(path):
