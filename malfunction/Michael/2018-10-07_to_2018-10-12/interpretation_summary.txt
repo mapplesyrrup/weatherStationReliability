@@ -1,0 +1,7 @@
+Event: Michael 2018-10-07 to 2018-10-12
+Stations considered: 275
+Stations flagged Likely_Malfunctioning (spatially suspect readings): 62
+
+Pearson correlation: LAT vs Suspect% = -0.046; LON vs Suspect% = 0.280
+Spearman (distance->suspect) rho=0.094, p=0.120
+Kendall tau=0.073, p=0.120

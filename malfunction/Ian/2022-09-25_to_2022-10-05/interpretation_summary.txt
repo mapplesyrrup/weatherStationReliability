@@ -1,0 +1,7 @@
+Event: Ian 2022-09-25 to 2022-10-05
+Stations considered: 1469
+Stations flagged Likely_Malfunctioning (spatially suspect readings): 699
+
+Pearson correlation: LAT vs Suspect% = -0.405; LON vs Suspect% = 0.272
+Spearman (distance->suspect) rho=-0.163, p=0.000
+Kendall tau=-0.120, p=0.000

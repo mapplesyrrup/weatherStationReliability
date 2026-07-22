@@ -1,0 +1,7 @@
+Event: Harvey 2016-08-23 to 2016-09-05
+Stations considered: 401
+Stations flagged Likely_Malfunctioning (spatially suspect readings): 94
+
+Pearson correlation: LAT vs Suspect% = -0.084; LON vs Suspect% = 0.152
+Spearman (distance->suspect) rho=0.047, p=0.351
+Kendall tau=0.034, p=0.364

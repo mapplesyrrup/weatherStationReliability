@@ -1,0 +1,7 @@
+Event: Rita 2004-09-18 to 2004-09-26
+Stations considered: 797
+Stations flagged Likely_Malfunctioning (spatially suspect readings): 381
+
+Pearson correlation: LAT vs Suspect% = -0.449; LON vs Suspect% = -0.191
+Spearman (distance->suspect) rho=-0.144, p=0.000
+Kendall tau=-0.108, p=0.000
