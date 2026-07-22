@@ -84,7 +84,7 @@ During the months prior to Hurricane Sandy, missing data was scattered and relat
 
 The time-series plot shows missing data rising from a baseline of ~10% to 30% at peak impact, followed by a partial recovery to around 20%, indicating that some stations were not repaired even after landfall (Figure 1c). Boxplots comparing geographic categories show that coastal, inland, and rural stations performed similarly before the storm (Figure 1d), but diverged dramatically during it. Coastal stations exhibited the highest levels of missing data, with some nearing complete data loss, while inland and rural stations showed little to no increase (Figure 1e). Dense urban networks, such as New York City, retained overall coverage despite some failures, showing how differences in network structure, rather than station quality, drive regional differences in weather station reliability.
 
-![Before Sandy](figures/sandyprevioussanders.png)
+![Before Sandy](figures/sandy/previoussanders.png)
 **Figure 1a.** Before Hurricane Sandy (2012). Missing data are present across the network, but the spatial pattern is far less pronounced than during the storm period. Most gaps appear clustered around urban areas, particularly New York City. There are no major clusters of extreme data loss along the coastline.
 >
 > **Figure 1b.** During Hurricane Sandy (2012). During the storm, the most substantial data gaps occurred along the coastline and across several regions of New Jersey. New York City also exhibited notable increases in missing data.
