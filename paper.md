@@ -38,6 +38,16 @@ To evaluate these hypotheses, the analysis measured the extent of missing or inc
 
 Daily precipitation data were obtained from the NOAA Global Historical Climatology Network Daily (GHCNd) archive [4]. To compare weather-station performance during major extreme precipitation events, six hurricanes affecting the Northeastern United States, Southeastern United States, and the Gulf Coast were selected. These regions vary widely in precipitation intensity and infrastructure vulnerability, which made them suitable for repeated case-study analysis.
 
+| Case Study | Location/Region | Date Range | Geographic Coordinates |
+|---|---|---|---|
+| Hurricane Sandy | NY, NJ, CT, DE | 2012-10-25 to 2012-11-05 | Latitude: 39.5 to 42.5<br>Longitude: -75.5 to -72.0 |
+| Hurricane Ida | Louisiana to Northeast | 2021-08-26 to 2021-09-05 | Latitude: 29.0 to 41.0<br>Longitude: -91.5 to -73.0 |
+| Hurricane Ian | FL, GA, SC, NC | 2022-09-25 to 2022-10-05 | Latitude: 26.0 to 34.0<br>Longitude: -84.0 to -78.5 |
+| Hurricane Harvey | TX, LA | 2017-08-23 to 2017-09-05 | Latitude: 27.0 to 31.5<br>Longitude: -96.5 to -91.0 |
+| Hurricane Rita | FL, TX, LA | 2005-09-18 to 2005-09-26 | Latitude: 26 to 33.5<br>Longitude: -98.5 to -87 |
+| Hurricane Michael | FL, GA, AL, NC, VA | 2018-10-02 to 2018-10-17 | Latitude: 29.0 to 33.0<br>Longitude: -86.5 to -83.0 |
+
+
 Using Python (packages included `os`, `io`, `zipfile`, `requests`, `numpy`, `pandas`, `matplotlib`, `geopandas`, `seaborn`, and `scipy`), the GHCNd dataset was processed for each of the six hurricanes. Across all runs, two essential metadata files were used: `ghcnd-stations.txt` (station coordinates and metadata) and `ghcnd-inventory.txt` (variables and years available at each station). For every event, the script filtered stations by latitude/longitude boundaries, timeframe, and variable type (e.g., PRCP).
 
 To standardize processing across hurricanes, a second automation script was created that loaded the predefined event boundaries in a two-dimensional array and reduced the chance of user input error. For each of the six hurricanes, this script generated three CSV files, resulting in 18 total CSV outputs across the study. These included:
