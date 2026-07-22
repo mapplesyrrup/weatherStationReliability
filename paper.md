@@ -88,14 +88,16 @@ The time-series plot shows missing data rising from a baseline of ~10% to 30% at
 **Figure 1a.** Before Hurricane Sandy (2012). Missing data are present across the network, but the spatial pattern is far less pronounced than during the storm period. Most gaps appear clustered around urban areas, particularly New York City. There are no major clusters of extreme data loss along the coastline.
 
 ![During Sandy](figures/sandy/sandy1.png)
-> **Figure 1b.** During Hurricane Sandy (2012). During the storm, the most substantial data gaps occurred along the coastline and across several regions of New Jersey. New York City also exhibited notable increases in missing data.
+**Figure 1b.** During Hurricane Sandy (2012). During the storm, the most substantial data gaps occurred along the coastline and across several regions of New Jersey. New York City also exhibited notable increases in missing data.
 
 ![Before BoxPlot Sandy](figures/sandy/beforesandbox.png)
-> **Figure 1c.** Boxplot of Mean Missing Data Before Hurricane Sandy (2012). Coastal, rural, and inland stations exhibit broadly similar levels of missing observations, generally falling within the 60–76 range. Coastal stations show slightly higher missing data overall, but the differences across the three geographic categories are modest.
->
-> **Figure 1d.** Boxplot of Mean Missing Data During Hurricane Sandy (2012). Missing data increased dramatically in coastal areas, with some stations reaching nearly 100% data loss. Inland stations also experienced elevated missing data, though to a lesser extent, peaking around 80%. In contrast, rural areas show minimal change.
->
-> **Figure 1e.** Time-series graph of Mean Missing Data During Hurricane Sandy (2012). The time series shows a baseline of approximately 10% missing data. As Sandy hit landfall, the percentage of missing observations climbed sharply, peaking near 30% on October 31. Following landfall, the proportion of missing data stabilizes around 20%.
+**Figure 1c.** Boxplot of Mean Missing Data Before Hurricane Sandy (2012). Coastal, rural, and inland stations exhibit broadly similar levels of missing observations, generally falling within the 60–76 range. Coastal stations show slightly higher missing data overall, but the differences across the three geographic categories are modest.
+
+![During BoxPlot Sandy](figures/sandy/duringsandybox.png)
+**Figure 1d.** Boxplot of Mean Missing Data During Hurricane Sandy (2012). Missing data increased dramatically in coastal areas, with some stations reaching nearly 100% data loss. Inland stations also experienced elevated missing data, though to a lesser extent, peaking around 80%. In contrast, rural areas show minimal change.
+
+![Time-series graph Sandy](figures/sandy/sandygraph.png)
+**Figure 1e.** Time-series graph of Mean Missing Data During Hurricane Sandy (2012). The time series shows a baseline of approximately 10% missing data. As Sandy hit landfall, the percentage of missing observations climbed sharply, peaking near 30% on October 31. Following landfall, the proportion of missing data stabilizes around 20%.
 
 ### 3.2 Case Study: Hurricane Ian
 
