@@ -124,10 +124,10 @@ During the months prior to Hurricane Harvey, missing data was scattered outside 
 
 The time-series plot shows that mean missing data stayed mostly consistent around 20–30%, with a dip to 10% on August 29, indicating only minor malfunctions during the storm (Figure 3e). Boxplots comparing geographic categories show that coastal, inland, and rural stations had similar levels of missing data before the storm (Figure 3c). However, during landfall, coastal stations showed the highest amounts of missing data, reflecting the storm's impact, while inland and rural stations showed minimal increases.
 
-![Before Harvey](figures/harvey/previoushorvery.png)
+![Before Harvey](figures/harvey/prevharvey.png)
 **Figure 3a.** Before Hurricane Harvey (2017). Most missing observations outside the Houston metropolitan area are scattered irregularly with no discernible spatial pattern. Within Houston, data coverage is more complete.
 
-![During Harvey](figures/harvey/duringhorvery.png)
+![During Harvey](figures/harvey/duringharvey.png)
 **Figure 3b.** During Hurricane Harvey (2017). Missing observations within the Houston metropolitan area increase noticeably. Outside of Houston, the spatial distribution of missing data remains largely similar to pre-storm conditions.
 
 ![Before BoxPlot Harvey](figures/harvey/prevharveybox.png)
@@ -166,15 +166,20 @@ During the months prior to Hurricane Michael, missing data was scattered with no
 
 The time-series plot shows the mean missing data rising from 10–20% to more than 30% during the hurricane, before returning to normal levels post-storm (Figure 5e). Coastal and inland stations experienced the largest increases in missing data during the storm, while rural stations remained stable. This highlights how both proximity to the storm and network density influence regional differences in weather station reliability.
 
-> **Figure 5a.** Before Hurricane Michael (2017). Missing data are mostly dispersed without a strong spatial pattern. However, a few modest clusters of missing values emerge along the coast, while smaller clusters appear inland.
->
-> **Figure 5b.** During Hurricane Michael (2018). The coastal–rural cluster remains visible, but the density of missing observations along the coast increases sharply. Inland stations show relatively little change, with missing data levels similar to those observed prior to the storm.
->
-> **Figure 5c.** Boxplot of Mean Missing Data Before Hurricane Michael (2017). Rural stations show the highest mean missing-data rates, averaging around 80%. Inland stations exhibit similarly elevated levels at roughly 74%. Coastal stations have the lowest missing-data rates, remaining below 60%.
->
-> **Figure 5d.** Boxplot of Mean Missing Data During Hurricane Michael (2018). Rural stations remain largely unchanged, with mean missing-data rates near 80%. In contrast, both inland and coastal stations experience a sharp increase, with missing-data levels rising to nearly 100%.
->
-> **Figure 5e.** Time-series graph of Mean Missing Data During Hurricane Michael (2018). The mean percentage of missing data increases sharply during the hurricane, rising from a baseline of roughly 10–20% to more than 30%, before returning to normal post-storm levels.
+![Before Michael](figures/michael/prev_michael.png)
+**Figure 5a.** Before Hurricane Michael (2017). Missing data are mostly dispersed without a strong spatial pattern. However, a few modest clusters of missing values emerge along the coast, while smaller clusters appear inland.
+
+![During Michael](figures/michael/duringmichael.png)
+**Figure 5b.** During Hurricane Michael (2018). The coastal–rural cluster remains visible, but the density of missing observations along the coast increases sharply. Inland stations show relatively little change, with missing data levels similar to those observed prior to the storm.
+
+![Before BoxPlot Michael](figures/michael/before_michael_box.png)
+**Figure 5c.** Boxplot of Mean Missing Data Before Hurricane Michael (2017). Rural stations show the highest mean missing-data rates, averaging around 80%. Inland stations exhibit similarly elevated levels at roughly 74%. Coastal stations have the lowest missing-data rates, remaining below 60%.
+
+![During BoxPlot Michael](figures/michael/during_michael_box.png)
+**Figure 5d.** Boxplot of Mean Missing Data During Hurricane Michael (2018). Rural stations remain largely unchanged, with mean missing-data rates near 80%. In contrast, both inland and coastal stations experience a sharp increase, with missing-data levels rising to nearly 100%.
+
+![Time-series graph Michael](figures/rmichael/during_michael_graph.png)
+**Figure 5e.** Time-series graph of Mean Missing Data During Hurricane Michael (2018). The mean percentage of missing data increases sharply during the hurricane, rising from a baseline of roughly 10–20% to more than 30%, before returning to normal post-storm levels.
 
 ---
 
