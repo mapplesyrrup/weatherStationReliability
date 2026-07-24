@@ -38,6 +38,7 @@ To evaluate these hypotheses, the analysis measured the extent of missing or inc
 
 Daily precipitation data were obtained from the NOAA Global Historical Climatology Network Daily (GHCNd) archive [4]. To compare weather-station performance during major extreme precipitation events, six hurricanes affecting the Northeastern United States, Southeastern United States, and the Gulf Coast were selected. These regions vary widely in precipitation intensity and infrastructure vulnerability, which made them suitable for repeated case-study analysis.
 
+*Table 1. Major hurricanes analyzed in this study.*
 | Case Study | Location/Region | Date Range | Geographic Coordinates |
 |---|---|---|---|
 | Hurricane Sandy | NY, NJ, CT, DE | 2012-10-25 to 2012-11-05 | Latitude: 39.5 to 42.5<br>Longitude: -75.5 to -72.0 |
@@ -58,7 +59,6 @@ To standardize processing across hurricanes, a second automation script was crea
 
 These files served as the basis for all tables, time-series plots, and visualizations. The script also produced bar plots comparing coastal, inland, and rural station performance before and during the hurricane, categorized using geopandas.
 
-*Table 1. Major hurricanes analyzed in this study.*
 
 ### 2.2 QGIS (Quantum Geographic Information System) Visualization
 
