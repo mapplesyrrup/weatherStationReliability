@@ -12,6 +12,7 @@ tags:
 authors:
   - name: Mabel Yang
     affiliation: "1, 2"
+    orcid: 0009-0007-1739-026
   - name: Nir Krakauer
     affiliation: 2
 affiliations:
