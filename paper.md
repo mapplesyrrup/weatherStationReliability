@@ -36,6 +36,8 @@ To evaluate these hypotheses, the analysis measured the extent of missing or inc
 
 ### 2.1 Python Data Analysis
 
+![Python](figures/python.png)
+
 Daily precipitation data were obtained from the NOAA Global Historical Climatology Network Daily (GHCNd) archive [4]. To compare weather-station performance during major extreme precipitation events, six hurricanes affecting the Northeastern United States, Southeastern United States, and the Gulf Coast were selected. These regions vary widely in precipitation intensity and infrastructure vulnerability, which made them suitable for repeated case-study analysis.
 
 *Table 1. Major hurricanes analyzed in this study.*
@@ -62,6 +64,8 @@ These files served as the basis for all tables, time-series plots, and visualiza
 
 
 ### 2.2 QGIS (Quantum Geographic Information System) Visualization
+
+![QGIS](figures/qgis.png)
 
 For each hurricane case study, two of the Python-generated CSV files (`selected_stations.csv` and `stations_with_missing_data.csv`) were imported into QGIS as delimited text layers. The selected-station layer displayed all active stations during the event as semi-transparent white circles. The malfunctioning-station layer was visualized using a graduated color scale ranging from light yellow to dark red to represent increasing percentages of missing data.
 
