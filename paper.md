@@ -83,6 +83,14 @@ Station density varied significantly across hurricane case studies. Hurricane Sa
 
 *Table 2. Station density (stations per km²) for selected hurricanes, showing the spatial coverage of weather stations during each case study.*
 
+| Case Study | Station Density (stations/km²) |
+|---|---|
+| Hurricane Sandy | 0.006371 |
+| Hurricane Ian | 0.003129 |
+| Hurricane Harvey | 0.001575 |
+| Hurricane Rita | 0.000870 |
+| Hurricane Michael | 0.001860 |
+
 ### 3.1 Case Study: Hurricane Sandy
 
 During the months prior to Hurricane Sandy, missing data was scattered and relatively limited, with no major coastal outages, showing stable station performance (Figure 1a). Most missing data was likely caused by station maintenance or malfunctions unrelated to Hurricane Sandy. However, during the storm, missing data increased dramatically along the coastline and across New Jersey, forming concentrated clusters of outages in areas closest to landfall (Figure 1b). Despite increased unreliability in NYC, the region's high station density of 0.006371 stations/km² (Table 2) allowed overall coverage to remain relatively intact compared to more exposed coastal zones, such as Long Island. This demonstrates that stations near coastlines and within a hurricane's landfall zone are most vulnerable to failure [5].
@@ -90,18 +98,23 @@ During the months prior to Hurricane Sandy, missing data was scattered and relat
 The time-series plot shows missing data rising from a baseline of ~10% to 30% at peak impact, followed by a partial recovery to around 20%, indicating that some stations were not repaired even after landfall (Figure 1c). Boxplots comparing geographic categories show that coastal, inland, and rural stations performed similarly before the storm (Figure 1d), but diverged dramatically during it. Coastal stations exhibited the highest levels of missing data, with some nearing complete data loss, while inland and rural stations showed little to no increase (Figure 1e). Dense urban networks, such as New York City, retained overall coverage despite some failures, showing how differences in network structure, rather than station quality, drive regional differences in weather station reliability.
 
 ![Before Sandy](figures/sandy/previoussanders.png)
+
 **Figure 1a.** Before Hurricane Sandy (2012). Missing data are present across the network, but the spatial pattern is far less pronounced than during the storm period. Most gaps appear clustered around urban areas, particularly New York City. There are no major clusters of extreme data loss along the coastline.
 
 ![During Sandy](figures/sandy/sandy1.png)
+
 **Figure 1b.** During Hurricane Sandy (2012). During the storm, the most substantial data gaps occurred along the coastline and across several regions of New Jersey. New York City also exhibited notable increases in missing data.
 
 ![Before BoxPlot Sandy](figures/sandy/beforesandbox.png)
+
 **Figure 1c.** Boxplot of Mean Missing Data Before Hurricane Sandy (2012). Coastal, rural, and inland stations exhibit broadly similar levels of missing observations, generally falling within the 60–76 range. Coastal stations show slightly higher missing data overall, but the differences across the three geographic categories are modest.
 
 ![During BoxPlot Sandy](figures/sandy/duringsandybox.png)
+
 **Figure 1d.** Boxplot of Mean Missing Data During Hurricane Sandy (2012). Missing data increased dramatically in coastal areas, with some stations reaching nearly 100% data loss. Inland stations also experienced elevated missing data, though to a lesser extent, peaking around 80%. In contrast, rural areas show minimal change.
 
 ![Time-series graph Sandy](figures/sandy/sandygraph.png)
+
 **Figure 1e.** Time-series graph of Mean Missing Data During Hurricane Sandy (2012). The time series shows a baseline of approximately 10% missing data. As Sandy hit landfall, the percentage of missing observations climbed sharply, peaking near 30% on October 31. Following landfall, the proportion of missing data stabilizes around 20%.
 
 ### 3.2 Case Study: Hurricane Ian
@@ -109,18 +122,22 @@ The time-series plot shows missing data rising from a baseline of ~10% to 30% at
 During the months prior to Hurricane Ian, missing data was concentrated in Tampa Bay and southeastern Florida, including Miami and other major coastal urban centers (Figure 2a). These gaps were most pronounced along the coastline, reflecting limitations in station coverage in densely populated areas. During the storm, missing data increased significantly along the east coast and Tampa Bay, with coastal and rural regions experiencing the largest increases; coastal stations reached around 80% missing data, while inland stations increased by only about 10% (Figures 2b, 2d). This pattern aligns with the hurricane's path and the regional station density, which for Hurricane Ian was 0.003129 stations/km² (Table 2), lower than that of Hurricane Sandy. The time-series plot shows no notable overall increase in missing data (Figure 2e), suggesting that despite localized failures, the network maintained stable reporting in most areas. This may be because the hurricane's impacts were concentrated in a relatively small portion of the study area, limiting widespread disruption to the broader observation network. These results indicate that stations near the storm's landfall and in low-density rural regions are most vulnerable to data loss, while inland networks retain more consistent reporting.
 
 ![Before Ian](figures/ian/previousian.png)
+
 **Figure 2a.** Before Hurricane Ian (2021). Missing data are concentrated in areas central to Tampa Bay and southeastern Florida. These gaps are particularly notable along the coastline.
 
 ![After Ian](figures/ian/duringian.png)
+
 **Figure 2b.** During Hurricane Ian (2022). Missing data increased significantly during the storm. A distinct pattern appears along the east coast and Tampa Bay. Southern Florida shows relatively less missing data, while inland areas further north, including parts of South Carolina, experience substantial gaps.
 
 ![Before BoxPlot Ian](figures/ian/beforeianbox.png)
+
 **Figure 2c.** Boxplot of Mean Missing Data Before Hurricane Ian (2021). Rural regions exhibit the highest proportion of missing data, around 80%. Coastal and inland areas show lower missing percentages, typically ranging from 40–60%.
 
 ![After BoxPlot Ian](figures/ian/afterianbox.png)
 **Figure 2d.** Boxplot of Mean Missing Data During Hurricane Ian (2022). Coastal and rural regions experienced the largest increases in missing data, with coastal stations reaching around 80% and inland stations increasing by only about 10%.
 
 ![Time-series graph Ian](figures/ian/iangraph.png)
+
 **Figure 2e.** Time-series graph of Mean Missing Data During Hurricane Ian (2012). No notable increase in missing observations is observed throughout the storm, with no significant rise in missing observations during the storm.
 
 ### 3.3 Case Study: Hurricane Harvey
@@ -130,18 +147,23 @@ During the months prior to Hurricane Harvey, missing data was scattered outside 
 The time-series plot shows that mean missing data stayed mostly consistent around 20–30%, with a dip to 10% on August 29, indicating only minor malfunctions during the storm (Figure 3e). Boxplots comparing geographic categories show that coastal, inland, and rural stations had similar levels of missing data before the storm (Figure 3c). However, during landfall, coastal stations showed the highest amounts of missing data, reflecting the storm's impact, while inland and rural stations showed minimal increases.
 
 ![Before Harvey](figures/harvey/prevharvey.png)
+
 **Figure 3a.** Before Hurricane Harvey (2017). Most missing observations outside the Houston metropolitan area are scattered irregularly with no discernible spatial pattern. Within Houston, data coverage is more complete.
 
 ![During Harvey](figures/harvey/duringharvey.png)
+
 **Figure 3b.** During Hurricane Harvey (2017). Missing observations within the Houston metropolitan area increase noticeably. Outside of Houston, the spatial distribution of missing data remains largely similar to pre-storm conditions.
 
 ![Before BoxPlot Harvey](figures/harvey/prevharveybox.png)
+
 **Figure 3c.** Boxplot of Mean Missing Data Before Hurricane Harvey (2017). Average missing data is similar across rural, inland, and coastal stations, ranging roughly between 50–60%.
 
 ![During BoxPlot Harvey](figures/harvey/duringharveybox.png)
+
 **Figure 3d.** Boxplot of Mean Missing Data during Hurricane Harvey (2017). Average missing data in rural and inland regions remains similar to pre-storm values, while missing data in coastal areas increases noticeably.
 
 ![Time-series graph Harvey](figures/harvey/harveygraph.png)
+
 **Figure 3e.** Time-series graph of Mean Missing Data During Hurricane Harvey (2017). The mean missing data stayed mostly consistent around 20% to 30%, but dipped on 2017/08/29 to 10%.
 
 ### 3.4 Case Study: Hurricane Rita
@@ -151,18 +173,23 @@ During the months prior to Hurricane Rita, missing data was scattered with no si
 The time-series plot shows missing data rising sharply from a baseline of 0% to around 45% on September 20, aligning with Hurricane Rita's landfall, before decreasing to 10% on September 26 (Figure 4e; [9]). Coastal stations experienced the highest missing data during the storm, while inland stations showed only minor increases. This highlights how low-density coastal networks are especially susceptible to disruptions during hurricanes, whereas inland stations maintain more consistent reporting.
 
 ![Before Rita](figures/rita/previousrita.png)
+
 **Figure 4a.** Before Hurricane Rita (2005). Missing values are scattered, no significant pattern.
 
 ![Before Rita](figures/rita/rita1.png)
+
 **Figure 4b.** During Hurricane Rita (2005). Missing values are concentrated along the coasts of Louisiana and Texas.
 
 ![Before BoxPlot Rita](figures/rita/beforeritabox.png)
+
 **Figure 4c.** Boxplot of Mean Missing Data Before Hurricane Rita (2005). Most stations report nearly complete data, with mean missing values close to zero. Only a few stations show small amounts of missing data, reflected as individual points outside the main distribution.
 
 ![During BoxPlot Rita](figures/rita/duringritabox.png)
+
 **Figure 4d.** Boxplot of Mean Missing Data During Hurricane Rita (2005). Missing data increased markedly along the coast, reaching approximately 55%, while inland stations experienced a smaller increase to around 10%. This pattern aligns closely with the hurricane's landfall.
 
 ![Time-series graph Rita](figures/rita/ritaprcp.png)
+
 **Figure 4e.** Time-series graph of Mean Missing Data During Hurricane Rita (2005). Starting from a baseline near 0%, missing data rapidly increased to approximately 45% on September 23, 2005. By September 26, missing data declined to around 10%, but never returned fully to 0%.
 
 ### 3.5 Case Study: Hurricane Michael
@@ -172,18 +199,23 @@ During the months prior to Hurricane Michael, missing data was scattered with no
 The time-series plot shows the mean missing data rising from 10–20% to more than 30% during the hurricane, before returning to normal levels post-storm (Figure 5e). Coastal and inland stations experienced the largest increases in missing data during the storm, while rural stations remained stable. This highlights how both proximity to the storm and network density influence regional differences in weather station reliability.
 
 ![Before Michael](figures/michael/prev_michael.png)
+
 **Figure 5a.** Before Hurricane Michael (2017). Missing data are mostly dispersed without a strong spatial pattern. However, a few modest clusters of missing values emerge along the coast, while smaller clusters appear inland.
 
 ![During Michael](figures/michael/duringmicheal.png)
+
 **Figure 5b.** During Hurricane Michael (2018). The coastal–rural cluster remains visible, but the density of missing observations along the coast increases sharply. Inland stations show relatively little change, with missing data levels similar to those observed prior to the storm.
 
 ![Before BoxPlot Michael](figures/michael/before_michael_box.png)
+
 **Figure 5c.** Boxplot of Mean Missing Data Before Hurricane Michael (2017). Rural stations show the highest mean missing-data rates, averaging around 80%. Inland stations exhibit similarly elevated levels at roughly 74%. Coastal stations have the lowest missing-data rates, remaining below 60%.
 
 ![During BoxPlot Michael](figures/michael/during_michael_box.png)
+
 **Figure 5d.** Boxplot of Mean Missing Data During Hurricane Michael (2018). Rural stations remain largely unchanged, with mean missing-data rates near 80%. In contrast, both inland and coastal stations experience a sharp increase, with missing-data levels rising to nearly 100%.
 
 ![Time-series graph Michael](figures/michael/during_michael_graph.png)
+
 **Figure 5e.** Time-series graph of Mean Missing Data During Hurricane Michael (2018). The mean percentage of missing data increases sharply during the hurricane, rising from a baseline of roughly 10–20% to more than 30%, before returning to normal post-storm levels.
 
 ---
