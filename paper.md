@@ -169,7 +169,7 @@ The time-series plot shows the mean missing data rising from 10–20% to more th
 ![Before Michael](figures/michael/prev_michael.png)
 **Figure 5a.** Before Hurricane Michael (2017). Missing data are mostly dispersed without a strong spatial pattern. However, a few modest clusters of missing values emerge along the coast, while smaller clusters appear inland.
 
-![During Michael](figures/michael/duringmichael.png)
+![During Michael](figures/michael/duringmicheal.png)
 **Figure 5b.** During Hurricane Michael (2018). The coastal–rural cluster remains visible, but the density of missing observations along the coast increases sharply. Inland stations show relatively little change, with missing data levels similar to those observed prior to the storm.
 
 ![Before BoxPlot Michael](figures/michael/before_michael_box.png)
@@ -178,7 +178,7 @@ The time-series plot shows the mean missing data rising from 10–20% to more th
 ![During BoxPlot Michael](figures/michael/during_michael_box.png)
 **Figure 5d.** Boxplot of Mean Missing Data During Hurricane Michael (2018). Rural stations remain largely unchanged, with mean missing-data rates near 80%. In contrast, both inland and coastal stations experience a sharp increase, with missing-data levels rising to nearly 100%.
 
-![Time-series graph Michael](figures/rmichael/during_michael_graph.png)
+![Time-series graph Michael](figures/michael/during_michael_graph.png)
 **Figure 5e.** Time-series graph of Mean Missing Data During Hurricane Michael (2018). The mean percentage of missing data increases sharply during the hurricane, rising from a baseline of roughly 10–20% to more than 30%, before returning to normal post-storm levels.
 
 ---
