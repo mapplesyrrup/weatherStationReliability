@@ -363,5 +363,3 @@ The patterns of missing data observed during hurricanes suggest clear avenues fo
  I would like to thank all the support from Dr. Shakila Merchant, Cesar Ortiz, and, my mentor, Dr. Nir Krakauer. I would also like to thank Yuneeb Awan making this experience so enjoyable.
  
 # References
-
-[12] F. Otto, "Without Warning: A Lack of Weather Stations Is Costing African Lives," *Yale Environment 360*, Oct. 2023. Retrieved from https://e360.yale.edu/features/africa-weather-stations-climate-change
