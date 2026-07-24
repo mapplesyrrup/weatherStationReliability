@@ -12,7 +12,7 @@ tags:
 authors:
   - name: Mabel Yang
     affiliation: "1, 2"
-    orcid: 0009-0007-1739-026
+    orcid: 0009-0007-1739-026X
   - name: Nir Krakauer
     affiliation: 2
 affiliations:
@@ -50,7 +50,7 @@ blind spots from just a few failures.
  
 Missing data in climate archives has long complicated the study of extreme
 weather. Existing approaches to this problem mostly focus on filling
-gaps after the fact. For example, using machine learning to generate
+gaps after the fact, for example, using machine learning to generate
 synthetic values from historical patterns. These imputation methods are
 useful for downstream analysis, but they do not address the underlying
 question this project asks: which stations and regions are most likely to
@@ -69,7 +69,7 @@ network-resilience decisions.
 # State of the field
  
 Prior work on missing values in climate datasets has concentrated on
-imputation, such as, reconstructing gaps using statistical methods or, more recently,
+imputation, such as reconstructing gaps using statistical methods or, more recently,
 AI-based approaches trained on historical climate patterns. These methods
 are valuable for producing complete records for downstream modeling, but
 because they are trained on past conditions, they are poorly suited to
@@ -88,10 +88,7 @@ storm-by-storm reliability assessment.
  
 # Software design
  
-The workflow is implemented in Python, shown in caseStudies.py
-(`os`, `io`, `zipfile`, `requests`, `numpy`, `pandas`, `matplotlib`,
-`geopandas`, `seaborn`, and `scipy`), downloads and filters the GHCNd
-station metadata (`ghcnd-stations.txt`) and inventory (`ghcnd-inventory.txt`)
+The workflow, implemented in Python (using os, io, zipfile, requests, numpy, pandas, matplotlib, geopandas, seaborn, and scipy) and shown in caseStudies.py, downloads and filters the GHCNd station metadata (`ghcnd-stations.txt`) and inventory (`ghcnd-inventory.txt`)
 files by latitude/longitude bounding box, date range, and variable type
 (e.g., precipitation) for a given event. Then, it stores
 each hurricane's spatial and temporal boundaries in a single predefined
@@ -115,16 +112,16 @@ import step between the two stages.
 The pipeline has been applied to six major U.S. hurricanes spanning 2005–2022
 (Sandy, Ida, Ian, Harvey, Rita, and Michael), generating 18 CSV outputs and
 associated reliability maps. The analysis surfaces concrete, storm-specific
-findings. For example, that some stations during Hurricane Harvey reported
+findings, for example, that some stations during Hurricane Harvey reported
 over 90% missing data, and that regional station density (ranging from
 0.000870 to 0.006371 stations/km² across the six case studies) is strongly
 associated with whether a storm produces a localized dip in coverage or a
 large observational blind spot.
 
-This research is currently being used in projects at The City College of New York. It also has been competed and reviewed by judges in CUNY STEM Summer Symposium, NYC Science Research Mentoring Consortium, NYC High School Student Research Conference (SRC), as well is Terra Science Fair. It will be continually improved by NOAA scholars. 
+This research is currently being used in projects at The City College of New York. It also has been competed in and reviewed by judges at the CUNY STEM Summer Symposium, NYC Science Research Mentoring Consortium, NYC High School Student Research Conference (SRC), as well is the Terra Science Fair. It will be continually improved by NOAA scholars. 
 
 # AI usage disclosure
-Generative AI (Claude Sonnet 4.6) was used is code debugging, specifically to download d1y files from the NOAA database. Otherwise, human authors reviewed, edited, validated all AI-assisted outputs and made the core design decisions.
+Generative AI (Claude Sonnet 4.6) was used in code debugging, specifically to download .dly files from the NOAA database. Otherwise, human authors reviewed, edited, validated all AI-assisted outputs and made the core design decisions.
 
 ## Abstract
 
@@ -148,6 +145,7 @@ The study was guided by two hypotheses:
  
 1. Weather stations located near coastlines or in flood-prone areas were expected to exhibit higher rates of missing data during hurricanes due to greater exposure to high winds and flooding.
 2. Stations situated in rural regions were expected to show higher rates of missing or inconsistent data than those in urban environments, reflecting differences in overall network density.
+
 To evaluate these hypotheses, the analysis measured the extent of missing or incomplete data before and during each hurricane and compared these patterns with data collected under normal, non-storm conditions. The study also examined whether outages clustered geographically based on distance to the coastline and rural versus urban classification, and whether certain regions demonstrated consistent patterns of malfunction across different storm events. Finally, the role of network density — specifically the spacing and redundancy of weather stations — was assessed to determine how the structure of the monitoring network influenced the likelihood and distribution of station failures.
 
 ---
