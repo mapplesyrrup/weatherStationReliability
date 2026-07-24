@@ -19,7 +19,7 @@ affiliations:
     index: 1
   - name: The City College of New York, New York City, New York, United States of America
     index: 2
-date: <"23 July 2026>
+date: 23 July 2026
 bibliography: paper.bib
 ---
 
@@ -123,7 +123,7 @@ large observational blind spot.
 This research is currently being used in projects at The City College of New York. It also has been competed and reviewed by judges in CUNY STEM Summer Symposium, NYC Science Research Mentoring Consortium, NYC High School Student Research Conference (SRC), as well is Terra Science Fair. It will be continually improved by NOAA scholars. 
 
 # AI usage disclosure
-Generative AI was used is code debugging, specifically to download d1y files from the NOAA database. Otherwise, all other design and decisions were made by the authors. 
+Generative AI (Claude Sonnet 4.6) was used is code debugging, specifically to download d1y files from the NOAA database. Otherwise, human authors reviewed, edited, validated all AI-assisted outputs and made the core design decisions.
 
 ## Abstract
 
