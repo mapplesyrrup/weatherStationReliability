@@ -1,9 +1,129 @@
-# Analyzing Weather Station Reliability During Extreme Precipitation Events
+---
+title: 'Analyzing Weather Station Reliability During Extreme Precipitation Events'
+tags:
+  - climate science
+  - weather stations
+  - GHCNd
+  - extreme precipitation
+  - hurricanes
+  - missing data
+  - station reliability
+  - network density
+authors:
+  - name: Mabel Yang
+    affiliation: "1, 2"
+  - name: Nir Krakauer
+    affiliation: 2
+affiliations:
+  - name: Stuyvesant High School, New York City, New York, United States of America
+    index: 1
+  - name: The City College of New York, New York City, New York, United States of America
+    index: 2
+date: <"23 July 2026>
+bibliography: paper.bib
+---
 
-**Mabel Yang¹², Dr. Nir Krakauer²**
+# Summary
+ 
+Weather stations are the backbone of climate monitoring, providing the daily precipitation and other measurements that
+climate modelers and emergency responders rely on. This is especially true
+during hurricanes and other extreme precipitation events, when accurate,
+up-to-date observations are needed most. Paradoxically, these same storms
+are the events most likely to knock stations offline, creating exactly the kind of
+data gaps that make severe weather harder to track and respond to.
+ 
+This project analyzes how reliably U.S. weather stations reported data
+during six major hurricanes, using records from NOAA's Global Historical
+Climatology Network Daily (GHCNd) archive. A Python-based processing
+pipeline measures the amount of missing or incomplete data at each station
+before and during each storm, and QGIS is used to map where those failures
+cluster geographically. The results show that stations near coastlines and
+within a storm's direct path fail most often, and that the consequences of
+failure depend heavily on how densely a region is monitored: dense urban
+networks (such as New York City during Hurricane Sandy) tend to retain
+overall coverage even when individual stations go down, while sparse rural
+networks (such as parts of the Gulf Coast) can develop large observational
+blind spots from just a few failures.
+ 
+# Statement of need
+ 
+Missing data in climate archives has long complicated the study of extreme
+weather. Existing approaches to this problem mostly focus on filling
+gaps after the fact. For example, using machine learning to generate
+synthetic values from historical patterns. These imputation methods are
+useful for downstream analysis, but they do not address the underlying
+question this project asks: which stations and regions are most likely to
+fail in the first place, and why?
+ 
+This software and workflow is built for climate researchers and emergency responders who need a reproducible way to
+quantify weather-station reliability during specific storm events, rather
+than a generic estimate of missing-data risk. By pairing an automated
+Python pipeline (station filtering, missing-data quantification, and
+geographic classification) with QGIS-based spatial visualization, the tool
+lets a user go from raw GHCNd archive files to per-station reliability
+statistics and hurricane-specific outage maps with minimal manual setup.
+The target output is intended to support targeted maintenance planning and
+network-resilience decisions.
+ 
+# State of the field
+ 
+Prior work on missing values in climate datasets has concentrated on
+imputation, such as, reconstructing gaps using statistical methods or, more recently,
+AI-based approaches trained on historical climate patterns. These methods
+are valuable for producing complete records for downstream modeling, but
+because they are trained on past conditions, they are poorly suited to
+characterizing behavior during the extreme events that cause the gaps in
+the first place.
+ 
+Existing GHCNd tooling and NOAA's own distribution infrastructure make the
+raw archive available, but do not provide workflow for
+event-specific reliability analysis. This would include comparing a station's missing-data
+rate before, during, and after a named storm, and relating that rate to
+geographic factors such as coastal proximity, urban/rural classification,
+and local station density. This project fills that gap by combining
+existing, free data sources (GHCNd, U.S. Census Bureau boundary
+files) for
+storm-by-storm reliability assessment.
+ 
+# Software design
+ 
+The workflow is implemented in Python, shown in caseStudies.py
+(`os`, `io`, `zipfile`, `requests`, `numpy`, `pandas`, `matplotlib`,
+`geopandas`, `seaborn`, and `scipy`), downloads and filters the GHCNd
+station metadata (`ghcnd-stations.txt`) and inventory (`ghcnd-inventory.txt`)
+files by latitude/longitude bounding box, date range, and variable type
+(e.g., precipitation) for a given event. Then, it stores
+each hurricane's spatial and temporal boundaries in a single predefined
+array, so that the same filtering and missing-data logic runs identically
+across all six case studies rather than being re-specified by hand for each
+one. Each run produces three CSV outputs:
+station-level metadata, per-station missing/malfunctioning-observation
+percentages, and day-level network-wide summaries.
+ 
+These CSVs files are then imported into QGIS as delimited text layers,
+using a graduated color scale to represent increasing missing-data
+percentages and overlaying U.S. Census Bureau boundary shapefiles for
+geographic context. Keeping the statistical processing (Python) and the
+spatial visualization (QGIS) as separate, file-based stages was a deliberate trade-off: it keeps the pipeline
+reproducible and inspectable at each step (the CSV outputs can be checked
+or reused independently of the maps), at the cost of requiring a manual
+import step between the two stages.
+ 
+# Research impact statement
+ 
+The pipeline has been applied to six major U.S. hurricanes spanning 2005–2022
+(Sandy, Ida, Ian, Harvey, Rita, and Michael), generating 18 CSV outputs and
+associated reliability maps. The analysis surfaces concrete, storm-specific
+findings. For example, that some stations during Hurricane Harvey reported
+over 90% missing data, and that regional station density (ranging from
+0.000870 to 0.006371 stations/km² across the six case studies) is strongly
+associated with whether a storm produces a localized dip in coverage or a
+large observational blind spot.
 
-¹Stuyvesant High School (New York City, New York, United States of America)
-²The City College of New York (New York City, New York, United States of America)
+This research is currently being used in projects at The City College of New York. It also has been competed and reviewed by judges in CUNY STEM Summer Symposium, NYC Science Research Mentoring Consortium, NYC High School Student Research Conference (SRC), as well is Terra Science Fair. It will be continually improved by NOAA scholars. 
+
+# AI usage disclosure
+Generative AI was used is code debugging, specifically to download d1y files from the NOAA database. Otherwise, all other design and decisions were made by the authors. 
 
 ## Abstract
 
